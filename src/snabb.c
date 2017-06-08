@@ -22,9 +22,11 @@
 #include <stdio.h>
 #include <syslog.h>
 
-#include "sysrepo.h"
-#include "sysrepo/values.h"
-#include "sysrepo/plugins.h"
+#include <sysrepo.h>
+#include <sysrepo/values.h>
+#include <sysrepo/plugins.h>
+
+#include "snabb.h"
 
 #define BUFSIZE 256
 
@@ -38,14 +40,14 @@ get_snabb_pid(const char *fmt, void *ptr)
 	char buf[BUFSIZE];
 
 	if ((fp = popen("exec bash -c 'snabb ps | head -n1 | cut -d \" \" -f1'", "r")) == NULL) {
-		fprintf(stderr, "Error opening pipe!\n");
+		ERR_MSG("Error opening pipe!");
 		return -1;
 	}
 
 	if (fgets(buf, BUFSIZE, fp) != NULL) {
 		sscanf(buf, fmt, ptr);
 	} else {
-		fprintf(stderr, "Error running 'snabb ps' command.\n");
+		ERR_MSG("Error running 'snabb ps' command.");
 	}
 
 	rc = pclose(fp);
@@ -56,11 +58,7 @@ get_snabb_pid(const char *fmt, void *ptr)
 static int
 module_change_cb(sr_session_ctx_t *session, const char *module_name, sr_notif_event_t event, void *private_ctx)
 {
-#ifdef PLUGIN
-	SRP_LOG_DBG("%s configuration has changed.", YANG_MODEL);
-#else
-	fprintf(stderr, "%s configuration has changed.\n", YANG_MODEL);
-#endif
+	INF("%s configuration has changed.", YANG_MODEL);
 
 	return SR_ERR_OK;
 }
@@ -84,11 +82,7 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx)
 		goto error;
 	}
 
-#ifdef PLUGIN
-	SRP_LOG_DBG("%s plugin initialized successfully", YANG_MODEL);
-#else
-	fprintf(stderr, "%s plugin initialized successfully\n", YANG_MODEL);
-#endif
+	INF("%s plugin initialized successfully", YANG_MODEL);
 
 	/* set subscription as our private context */
 	*private_ctx = subscription;
@@ -96,11 +90,7 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx)
 	return SR_ERR_OK;
 
 error:
-#ifdef PLUGIN
-	SRP_LOG_ERR("%s plugin initialization failed: %s\n", YANG_MODEL, sr_strerror(rc));
-#else
-	fprintf(stderr, "%s plugin initialization failed: %s\n", YANG_MODEL, sr_strerror(rc));
-#endif
+	ERR("%s plugin initialization failed: %s\n", YANG_MODEL, sr_strerror(rc));
 	sr_unsubscribe(session, subscription);
 	return rc;
 }
@@ -111,11 +101,7 @@ sr_plugin_cleanup_cb(sr_session_ctx_t *session, void *private_ctx)
 	/* subscription was set as our private context */
 	sr_unsubscribe(session, private_ctx);
 
-#ifdef PLUGIN
-	SRP_LOG_DBG("%s plugin cleanup finished.", YANG_MODEL);
-#else
-	fprintf(stderr, "%s plugin cleanup finished.\n", YANG_MODEL);
-#endif
+	INF("%s plugin cleanup finished.", YANG_MODEL);
 }
 
 #ifndef PLUGIN
@@ -127,14 +113,14 @@ volatile int exit_application = 0;
 static void
 sigint_handler(int signum)
 {
-	fprintf(stderr, "Sigint called, exiting...\n");
+	INF_MSG("Sigint called, exiting...");
 	exit_application = 1;
 }
 
 int
 main(int argc, char *argv[])
 {
-	fprintf(stderr,"Plugin application mode initialized\n");
+	INF_MSG("Plugin application mode initialized");
 	sr_conn_ctx_t *connection = NULL;
 	sr_session_ctx_t *session = NULL;
 	int rc = SR_ERR_OK;
@@ -142,14 +128,14 @@ main(int argc, char *argv[])
 	/* connect to sysrepo */
 	rc = sr_connect(YANG_MODEL, SR_CONN_DEFAULT, &connection);
 	if (SR_ERR_OK != rc) {
-		fprintf(stderr, "Error by sr_connect: %s\n", sr_strerror(rc));
+		ERR("Error by sr_connect: %s\n", sr_strerror(rc));
 		goto cleanup;
 	}
 
 	/* start session */
 	rc = sr_session_start(connection, SR_DS_RUNNING, SR_SESS_DEFAULT, &session);
 	if (SR_ERR_OK != rc) {
-		fprintf(stderr, "Error by sr_session_start: %s\n", sr_strerror(rc));
+		ERR("Error by sr_session_start: %s\n", sr_strerror(rc));
 		goto cleanup;
 	}
 
