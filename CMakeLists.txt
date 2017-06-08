@@ -5,12 +5,19 @@ set(CMAKE_C_FLAGS         "${CMAKE_C_FLAGS} -Wall -Wpedantic -std=gnu11")
 set(CMAKE_C_FLAGS_RELEASE "-DNDEBUG -O2")
 set(CMAKE_C_FLAGS_DEBUG   "-g -O0")
 
+set(PLUGIN 1 CACHE BOOL "Build a plugin.")
+
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/CMakeModules/")
 
 set(SOURCES
 	src/snabb.c)
 
-add_library(${CMAKE_PROJECT_NAME} MODULE ${SOURCES})
+if (PLUGIN)
+	add_library(${CMAKE_PROJECT_NAME} MODULE ${SOURCES})
+else()
+	add_executable(${CMAKE_PROJECT_NAME} ${SOURCES})
+endif()
+
 set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES PREFIX "")
 
 find_package(SYSREPO REQUIRED)
@@ -42,4 +49,8 @@ if (RET)
 	message(FATAL_ERROR \"  Command sysrepoctl list failed:\n  \${OUT}\")
 endif()
 
-install(TARGETS ${CMAKE_PROJECT_NAME} DESTINATION ${SR_PLUGINS_DIR})
+if (PLUGIN)
+	install(TARGETS ${CMAKE_PROJECT_NAME} DESTINATION ${SR_PLUGINS_DIR})
+else()
+	install(TARGETS ${CMAKE_PROJECT_NAME} RUNTIME DESTINATION bin)
+endif()
