@@ -75,6 +75,7 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx)
 	if (0 != rc) {
 		goto error;
 	}
+	INF("snabb pid is %d", pid);
 
 	rc = sr_module_change_subscribe(session, YANG_MODEL, module_change_cb, NULL,
 			0, SR_SUBSCR_DEFAULT, &subscription);
