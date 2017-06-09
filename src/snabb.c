@@ -35,8 +35,7 @@
 const char *YANG_MODEL = "snabb-softwire-v1";
 
 static int
-get_snabb_pid(const char *fmt, void *ptr)
-{
+get_snabb_pid(const char *fmt, void *ptr) {
 	int rc = SR_ERR_OK;
 	FILE *fp;
 	char buf[BUFSIZE];
@@ -59,8 +58,7 @@ get_snabb_pid(const char *fmt, void *ptr)
 }
 
 static int
-module_change_cb(sr_session_ctx_t *session, const char *module_name, sr_notif_event_t event, void *private_ctx)
-{
+module_change_cb(sr_session_ctx_t *session, const char *module_name, sr_notif_event_t event, void *private_ctx) {
 	ctx_t *ctx = private_ctx;
 	INF("%s configuration has changed.", ctx->yang_model);
 
@@ -68,8 +66,7 @@ module_change_cb(sr_session_ctx_t *session, const char *module_name, sr_notif_ev
 }
 
 int
-sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx)
-{
+sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
 	sr_subscription_ctx_t *subscription = NULL;
 	int rc = SR_ERR_OK;
 	ctx_t *ctx = NULL;
@@ -118,8 +115,7 @@ error:
 }
 
 void
-sr_plugin_cleanup_cb(sr_session_ctx_t *session, void *private_ctx)
-{
+sr_plugin_cleanup_cb(sr_session_ctx_t *session, void *private_ctx) {
 	if (NULL == session || NULL == private_ctx) {
 		return;
 	}
@@ -139,15 +135,13 @@ sr_plugin_cleanup_cb(sr_session_ctx_t *session, void *private_ctx)
 volatile int exit_application = 0;
 
 static void
-sigint_handler(int signum)
-{
+sigint_handler(int signum) {
 	INF_MSG("Sigint called, exiting...");
 	exit_application = 1;
 }
 
 int
-main()
-{
+main() {
 	INF_MSG("Plugin application mode initialized");
 	sr_conn_ctx_t *connection = NULL;
 	sr_session_ctx_t *session = NULL;
@@ -174,11 +168,11 @@ main()
 
 	sr_plugin_cleanup_cb(session, private_ctx);
 cleanup:
-    if (NULL != session) {
-        sr_session_stop(session);
-    }
-    if (NULL != connection) {
-        sr_disconnect(connection);
-    }
+	if (NULL != session) {
+		sr_session_stop(session);
+	}
+	if (NULL != connection) {
+		sr_disconnect(connection);
+	}
 }
 #endif
