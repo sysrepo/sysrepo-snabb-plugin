@@ -30,6 +30,15 @@
 
 char ch[SNABB_SOCKET_MAX];
 
+typedef enum sb_command_e {
+    SB_GET = 0,   /* read configuration data */
+    SB_GET_STATE, /* read state data */
+    SB_LOAD,      /* load a new configuration */
+    SB_SET,       /* incrementally update configuration */
+    SB_ADD,       /* augment configuration, for example by adding a routing table entry */
+    SB_REMOVE,    /* remove a component from a configuration, for example removing a routing table entry */
+} sb_command_t;
+
 typedef struct ctx_s {
 	const char *yang_model;
 	int pid;
@@ -39,7 +48,7 @@ typedef struct ctx_s {
 } ctx_t;
 
 int socket_connect(ctx_t *ctx);
-int socket_send(ctx_t *ctx, char *message, char *method);
+int socket_send(ctx_t *ctx, char *message, sb_command_t command);
 void socket_close(ctx_t *ctx);
 
 #endif /* TRANSFORM_H */

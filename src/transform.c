@@ -94,7 +94,7 @@ error:
 	return SR_ERR_INTERNAL;
 }
 
-int socket_send(ctx_t *ctx, char *message, char *method) {
+int socket_send(ctx_t *ctx, char *message, sb_command_t command) {
 	char buffer[SNABB_MESSAGE_MAX];
 	int  nbytes;
 
@@ -104,25 +104,44 @@ int socket_send(ctx_t *ctx, char *message, char *method) {
 	nbytes = write(ctx->socket_fd, buffer, nbytes);
 	if ((int) strlen(formated) != (int) nbytes) {
 		ERR("Failed to write full messaget o server: written %d, expected %d", (int) nbytes, (int) strlen(formated));
-		goto error;
+		free(formated);
+		return SR_ERR_INTERNAL;
 	}
 	free(formated);
 
 	nbytes = read(ctx->socket_fd, ch, SNABB_SOCKET_MAX);
 	ch[nbytes] = 0;
 
+	/* count new lines */
+	int counter = 0;
+	for (int i = 0; i < (int) strlen(ch); i++) {
+		if ('\n' == ch[i]) {
+			counter++;
+		}
+	}
+	/* if it has 5 new lines that means it has 'status' parameter */
+
 	if (0 == nbytes) {
-		WRN("Operation faild for: %s", message);
+		goto failed;
+	} else if (5 == counter) {
+		goto failed;
+	} else if (SB_SET == command && 18 != nbytes) {
+		goto failed;
+	} else if (SB_GET == command && 0 == nbytes) {
+		goto failed;
 	} else {
-		INF("SUCESS for method: %s, len %d", method, nbytes);
+		INF("Operation:\n%s", message);
+		INF("Respons:\n%s", ch);
 	}
 
-	printf("MESSAGE FROM SERVER: %s\n", ch);
+	/* set null terminated string at the beggining */
 	ch[0] = 0;
 
 	/* based on the leader.lua file */
 
 	return SR_ERR_OK;
-error:
+failed:
+	WRN("Operation faild for:\n%s", message);
+	WRN("Respons:\n%s", ch);
 	return SR_ERR_INTERNAL;
 }
