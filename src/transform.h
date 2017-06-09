@@ -24,7 +24,11 @@
 
 #include <sysrepo.h>
 
-#define UNIX_PATH_MAX 256
+#define UNIX_PATH_MAX     256
+#define SNABB_MESSAGE_MAX 1024
+#define SNABB_SOCKET_MAX  100000000
+
+char ch[SNABB_SOCKET_MAX];
 
 typedef struct ctx_s {
 	const char *yang_model;

@@ -95,19 +95,28 @@ error:
 }
 
 int socket_send(ctx_t *ctx, char *message) {
-	char buffer[256];
+	char buffer[SNABB_MESSAGE_MAX];
 	int  nbytes;
 
 	char *formated = format_message(message);
-	nbytes = snprintf(buffer, 256, "%s", formated);
+	nbytes = snprintf(buffer, SNABB_MESSAGE_MAX, "%s", formated);
+
+	nbytes = write(ctx->socket_fd, buffer, nbytes);
+	if ((int) strlen(formated) != (int) nbytes) {
+		ERR("Failed to write full messaget o server: written %d, expected %d", (int) nbytes, (int) strlen(formated));
+		goto error;
+	}
 	free(formated);
 
-	write(ctx->socket_fd, buffer, nbytes);
+	nbytes = read(ctx->socket_fd, ch, SNABB_SOCKET_MAX);
+	ch[nbytes] = 0;
 
-	nbytes = read(ctx->socket_fd, buffer, 256);
-	buffer[nbytes] = 0;
+	printf("MESSAGE FROM SERVER: %s\n", ch);
+	ch[0] = 0;
 
-	printf("MESSAGE FROM SERVER: %s\n", buffer);
+	/* based on the leader.lua file */
 
 	return SR_ERR_OK;
+error:
+	return SR_ERR_INTERNAL;
 }

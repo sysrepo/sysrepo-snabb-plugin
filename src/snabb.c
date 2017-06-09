@@ -100,8 +100,9 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx)
 	CHECK_RET(rc, error, "failed socket_connect: %s", sr_strerror(rc));
 
 	//char *message = "get-config {path '/'; schema snabb-softwire-v1;}";
-	//rc = socket_send(ctx, message);
-	//CHECK_RET(rc, error, "failed socket_send for message %s", message);
+	char *message = "set-config {path '/softwire-config/internal-interface/allow-incoming-icmp'; value 'true'; schema snabb-softwire-v1;}";
+	rc = socket_send(ctx, message);
+	CHECK_RET(rc, error, "failed socket_send for message %s", message);
 
 	return SR_ERR_OK;
 
@@ -171,8 +172,8 @@ main()
 		sleep(1);  /* or do some more useful work... */
 	}
 
-cleanup:
 	sr_plugin_cleanup_cb(session, private_ctx);
+cleanup:
     if (NULL != session) {
         sr_session_stop(session);
     }
