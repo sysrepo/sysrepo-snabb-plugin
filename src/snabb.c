@@ -77,8 +77,8 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx)
 
 	ctx = malloc(sizeof *ctx);
 	ctx->yang_model = YANG_MODEL;
-	ctx->socket = -1;
 	ctx->sub = subscription;
+	ctx->socket_fd = -1;
 
 	/* get snabb process ID */
 	rc = get_snabb_pid("%d", &pid);
@@ -94,6 +94,14 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx)
 
 	/* set subscription as our private context */
 	*private_ctx = ctx;
+
+	/* connect to snabb UNIX socket */
+	rc = socket_connect(ctx);
+	CHECK_RET(rc, error, "failed socket_connect: %s", sr_strerror(rc));
+
+	//char *message = "get-config {path '/'; schema snabb-softwire-v1;}";
+	//rc = socket_send(ctx, message);
+	//CHECK_RET(rc, error, "failed socket_send for message %s", message);
 
 	return SR_ERR_OK;
 
@@ -119,6 +127,7 @@ sr_plugin_cleanup_cb(sr_session_ctx_t *session, void *private_ctx)
 	sr_unsubscribe(session, ctx->sub);
 
 	INF("%s plugin cleanup finished.", ctx->yang_model);
+	socket_close(ctx);
 	free(ctx);
 }
 

@@ -24,11 +24,18 @@
 
 #include <sysrepo.h>
 
+#define UNIX_PATH_MAX 256
+
 typedef struct ctx_s {
 	const char *yang_model;
 	int pid;
-	int socket;
+	int socket_fd;
+	char socket_path[UNIX_PATH_MAX];
 	sr_subscription_ctx_t *sub;
 } ctx_t;
+
+int socket_connect(ctx_t *ctx);
+int socket_send(ctx_t *ctx, char *message);
+void socket_close(ctx_t *ctx);
 
 #endif /* TRANSFORM_H */
