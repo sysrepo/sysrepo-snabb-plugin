@@ -87,7 +87,7 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx)
 	ctx->pid = pid;
 	INF("snabb pid is %d", pid);
 
-	rc = sr_module_change_subscribe(session, ctx->yang_model, module_change_cb, &ctx, 0, SR_SUBSCR_DEFAULT, &ctx->sub);
+	rc = sr_module_change_subscribe(session, ctx->yang_model, module_change_cb, ctx, 0, SR_SUBSCR_DEFAULT, &ctx->sub);
 	CHECK_RET(rc, error, "failed sr_module_change_subscribe: %s", sr_strerror(rc));
 
 	INF("%s plugin initialized successfully", ctx->yang_model);
