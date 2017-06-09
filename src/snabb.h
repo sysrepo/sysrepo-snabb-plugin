@@ -22,42 +22,4 @@
 #ifndef SNABB_H
 #define SNABB_H
 
-#include "sysrepo/plugins.h"
-
-#ifdef PLUGIN
-#define ERR(MSG, ...) SRP_LOG_ERR(MSG, ...)
-#define ERR_MSG(MSG) SRP_LOG_ERR_MSG(MSG)
-#define WRN(MSG, ...) define SRP_LOG_WRN(MSG, ...)
-#define WRN_MSG(MSG) define SRP_LOG_WRN_MSG(MSG)
-#define INF(MSG, ...) SRP_LOG_INF(MSG, ...)
-#define INF_MSG(MSG) SRP_LOG_INF_MSG(MSG)
-#define DBG(MSG, ...) SRP_LOG_DBG(MSG, ...)
-#define DBG_MSG(MSG) SRP_LOG_DBG_MSG(MSG)
-#else
-#define ERR(MSG, ...) SRP_LOG__STDERR(SR_LL_ERR, MSG, __VA_ARGS__)
-#define ERR_MSG(MSG) SRP_LOG__STDERR(SR_LL_ERR, MSG, "")
-#define WRN(MSG, ...) SRP_LOG__STDERR(SR_LL_WRN, MSG, __VA_ARGS__)
-#define WRN_MSG(MSG) SRP_LOG__STDERR(SR_LL_WRN, MSG, "")
-#define INF(MSG, ...) SRP_LOG__STDERR(SR_LL_INF, MSG, __VA_ARGS__)
-#define INF_MSG(MSG) SRP_LOG__STDERR(SR_LL_INF, MSG, "")
-#define DBG(MSG, ...) SRP_LOG__STDERR(SR_LL_DBG, MSG, __VA_ARGS__)
-#define DBG_MSG(MSG) SRP_LOG__STDERR(SR_LL_DBG, MSG, "")
-#endif
-
-#define CHECK_RET_MSG(RET, LABEL, MSG)                                                                                                               \
-	do {                                                                                                                                             \
-		if (SR_ERR_OK != RET) {                                                                                                                      \
-			ERR_MSG(MSG) SRP_LOG_ERR_MSG(MSG);                                                                                                       \
-			goto LABEL;                                                                                                                              \
-		}                                                                                                                                            \
-	} while (0)
-
-#define CHECK_RET(RET, LABEL, MSG, ...)                                                                                                              \
-	do {                                                                                                                                             \
-		if (SR_ERR_OK != RET) {                                                                                                                      \
-			ERR(MSG, __VA_ARGS__) SRP_LOG_ERR(MSG, __VA_ARGS__);                                                                                     \
-			goto LABEL;                                                                                                                              \
-		}                                                                                                                                            \
-	} while (0)
-
 #endif /* SNABB_H */

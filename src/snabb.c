@@ -27,6 +27,7 @@
 #include <sysrepo/plugins.h>
 
 #include "snabb.h"
+#include "common.h"
 #include "transform.h"
 
 #define BUFSIZE 256
