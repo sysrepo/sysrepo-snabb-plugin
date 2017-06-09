@@ -39,7 +39,7 @@ typedef struct ctx_s {
 } ctx_t;
 
 int socket_connect(ctx_t *ctx);
-int socket_send(ctx_t *ctx, char *message);
+int socket_send(ctx_t *ctx, char *message, char *method);
 void socket_close(ctx_t *ctx);
 
 #endif /* TRANSFORM_H */

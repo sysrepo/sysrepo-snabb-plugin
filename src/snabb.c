@@ -97,8 +97,8 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
 	CHECK_RET(rc, error, "failed socket_connect: %s", sr_strerror(rc));
 
 	//char *message = "get-config {path '/'; schema snabb-softwire-v1;}";
-	char *message = "set-config {path '/softwire-config/internal-interface/allow-incoming-icmp'; value 'true'; schema snabb-softwire-v1;}";
-	rc = socket_send(ctx, message);
+	char *message = "set-config {path '/softwire-config/internal-interface/allow-incoming-icmp'; config 'true'; schema snabb-softwire-v1;}";
+	rc = socket_send(ctx, message, "set-config");
 	CHECK_RET(rc, error, "failed socket_send for message %s", message);
 
 	return SR_ERR_OK;

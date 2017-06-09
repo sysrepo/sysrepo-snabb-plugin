@@ -94,7 +94,7 @@ error:
 	return SR_ERR_INTERNAL;
 }
 
-int socket_send(ctx_t *ctx, char *message) {
+int socket_send(ctx_t *ctx, char *message, char *method) {
 	char buffer[SNABB_MESSAGE_MAX];
 	int  nbytes;
 
@@ -110,6 +110,12 @@ int socket_send(ctx_t *ctx, char *message) {
 
 	nbytes = read(ctx->socket_fd, ch, SNABB_SOCKET_MAX);
 	ch[nbytes] = 0;
+
+	if (0 == nbytes) {
+		WRN("Operation faild for: %s", message);
+	} else {
+		INF("SUCESS for method: %s, len %d", method, nbytes);
+	}
 
 	printf("MESSAGE FROM SERVER: %s\n", ch);
 	ch[0] = 0;
