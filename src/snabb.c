@@ -34,6 +34,51 @@
 
 const char *YANG_MODEL = "snabb-softwire-v1";
 
+static void
+print_change(sr_change_oper_t op, sr_val_t *old_val, sr_val_t *new_val) {
+	switch(op) {
+	case SR_OP_CREATED:
+		if (NULL != new_val) {
+			printf("CREATED: ");
+			sr_print_val(new_val);
+		}
+		break;
+	case SR_OP_DELETED:
+		if (NULL != old_val) {
+			printf("DELETED: ");
+			sr_print_val(old_val);
+		}
+	break;
+	case SR_OP_MODIFIED:
+		if (NULL != old_val && NULL != new_val) {
+			printf("MODIFIED: ");
+			printf("old value ");
+			sr_print_val(old_val);
+			printf("new value ");
+			sr_print_val(new_val);
+		}
+	break;
+	case SR_OP_MOVED:
+		if (NULL != new_val) {
+			printf("MOVED: %s after %s", new_val->xpath, NULL != old_val ? old_val->xpath : NULL);
+		}
+	break;
+	}
+}
+
+const char *
+ev_to_str(sr_notif_event_t ev) {
+	switch (ev) {
+	case SR_EV_VERIFY:
+		return "verify";
+	case SR_EV_APPLY:
+		return "apply";
+		case SR_EV_ABORT:
+	default:
+	return "abort";
+	}
+}
+
 static int
 get_snabb_pid(const char *fmt, void *ptr) {
 	int rc = SR_ERR_OK;
@@ -58,10 +103,48 @@ get_snabb_pid(const char *fmt, void *ptr) {
 }
 
 static int
+parse_config(sr_session_ctx_t *session, const char *module_name, ctx_t *ctx) {
+	sr_change_iter_t *it = NULL;
+	int rc = SR_ERR_OK;
+	sr_change_oper_t oper;
+	sr_val_t *old_value = NULL;
+	sr_val_t *new_value = NULL;
+	char xpath[XPATH_MAX_LEN] = {0,};
+
+	snprintf(xpath, XPATH_MAX_LEN, "/%s:*", module_name);
+
+	rc = sr_get_changes_iter(session, xpath , &it);
+	if (SR_ERR_OK != rc) {
+		printf("Get changes iter failed for xpath %s", xpath);
+		goto cleanup;
+	}
+
+	while (SR_ERR_OK == (rc = sr_get_change_next(session, it, &oper, &old_value, &new_value))) {
+		print_change(oper, old_value, new_value);
+		sr_free_val(old_value);
+		sr_free_val(new_value);
+	}
+
+	return rc;
+
+cleanup:
+	sr_free_change_iter(it);
+
+	return SR_ERR_INTERNAL;
+}
+
+
+static int
 module_change_cb(sr_session_ctx_t *session, const char *module_name, sr_notif_event_t event, void *private_ctx) {
 	ctx_t *ctx = private_ctx;
 	INF("%s configuration has changed.", ctx->yang_model);
 
+	printf("\n\n ========== Notification  %s =============================================", ev_to_str(event));
+	if (SR_EV_APPLY == event) {
+		return SR_ERR_OK;
+	}
+
+	parse_config(session, module_name, ctx);
 	return SR_ERR_OK;
 }
 
@@ -96,18 +179,20 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
 	rc = socket_connect(ctx);
 	CHECK_RET(rc, error, "failed socket_connect: %s", sr_strerror(rc));
 
-	//char *message = "get-config {path '/bla'; schema snabb-softwire-v1;}";
+	//char *message = "get-config {path '/'; schema snabb-softwire-v1;}";
 	//rc = socket_send(ctx, message, SB_GET);
 	//CHECK_RET(rc, error, "failed socket_send for message %s", message);
-	//char *message = "set-config {path '/softwire-config/internal-interface/allow-incoming-icmp'; config 'true'; schema snabb-softwire-v1;}";
+	//message = "set-config {path '/softwire-config/internal-interface/allow-incoming-icmp'; config 'true'; schema snabb-softwire-v1;}";
 	//rc = socket_send(ctx, message, SB_SET);
 	//CHECK_RET(rc, error, "failed socket_send for message %s", message);
+
+	sysrepo_to_snabb(ctx, SR_OP_MODIFIED, "/snabb-softwire-v1:softwire-config/external-interface/error-rate-limiting/packets", "600020");
 
 	return SR_ERR_OK;
 
 error:
 	ERR("%s plugin initialization failed: %s", ctx->yang_model, sr_strerror(rc));
-    if (NULL != ctx->sub) {
+	if (NULL != ctx->sub) {
 		sr_unsubscribe(session, ctx->sub);
 	}
 	if (NULL != ctx) {

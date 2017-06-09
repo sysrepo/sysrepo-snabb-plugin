@@ -145,3 +145,31 @@ failed:
 	WRN("Respons:\n%s", ch);
 	return SR_ERR_INTERNAL;
 }
+
+int
+sysrepo_to_snabb(ctx_t *ctx, sr_notif_event_t event, char *xpath, char *value) {
+	int  rc = SR_ERR_OK;
+	sb_command_t command;
+	char *xpath_substring;
+
+	/* create snabb command */
+	switch(event) {
+	case SR_OP_MODIFIED:
+		command = SB_SET;
+	default:
+		command = SB_SET;
+	}
+
+	/* transform sysrepo xpath to snabb xpath
+	 * skip the first N characters '/<yang_model>:'
+	 */
+	xpath_substring = xpath + ((2 + strlen(ctx->yang_model)) * sizeof *xpath_substring);
+
+	//TODO make dynamic
+	char message[SNABB_MESSAGE_MAX];
+	snprintf(message, SNABB_MESSAGE_MAX, "set-config {path '/%s'; config '%s'; schema %s;}", xpath_substring, value, ctx->yang_model);
+
+	socket_send(ctx, message, command);
+
+	return rc;
+}

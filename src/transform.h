@@ -24,6 +24,8 @@
 
 #include <sysrepo.h>
 
+
+#define XPATH_MAX_LEN     128
 #define UNIX_PATH_MAX     256
 #define SNABB_MESSAGE_MAX 1024
 #define SNABB_SOCKET_MAX  100000000
@@ -50,5 +52,7 @@ typedef struct ctx_s {
 int socket_connect(ctx_t *ctx);
 int socket_send(ctx_t *ctx, char *message, sb_command_t command);
 void socket_close(ctx_t *ctx);
+
+int sysrepo_to_snabb(ctx_t *ctx, sr_notif_event_t event, char *xpath, char *value);
 
 #endif /* TRANSFORM_H */
