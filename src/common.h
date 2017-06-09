@@ -35,13 +35,13 @@
 #define DBG_MSG(MSG) SRP_LOG_DBG_MSG(MSG)
 #else
 #define ERR(MSG, ...) SRP_LOG__STDERR(SR_LL_ERR, MSG, __VA_ARGS__)
-#define ERR_MSG(MSG) SRP_LOG__STDERR(SR_LL_ERR, MSG, "")
+#define ERR_MSG(MSG) SRP_LOG__STDERR(SR_LL_ERR, MSG "%s", "")
 #define WRN(MSG, ...) SRP_LOG__STDERR(SR_LL_WRN, MSG, __VA_ARGS__)
-#define WRN_MSG(MSG) SRP_LOG__STDERR(SR_LL_WRN, MSG, "")
+#define WRN_MSG(MSG) SRP_LOG__STDERR(SR_LL_WRN, MSG "%s", "")
 #define INF(MSG, ...) SRP_LOG__STDERR(SR_LL_INF, MSG, __VA_ARGS__)
-#define INF_MSG(MSG) SRP_LOG__STDERR(SR_LL_INF, MSG, "")
+#define INF_MSG(MSG) SRP_LOG__STDERR(SR_LL_INF, MSG "%s", "")
 #define DBG(MSG, ...) SRP_LOG__STDERR(SR_LL_DBG, MSG, __VA_ARGS__)
-#define DBG_MSG(MSG) SRP_LOG__STDERR(SR_LL_DBG, MSG, "")
+#define DBG_MSG(MSG) SRP_LOG__STDERR(SR_LL_DBG, MSG "%s", "")
 #endif
 
 #define CHECK_RET_MSG(RET, LABEL, MSG)                                                                                                               \
