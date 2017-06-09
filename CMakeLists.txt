@@ -10,7 +10,8 @@ set(PLUGIN 1 CACHE BOOL "Build a plugin.")
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/CMakeModules/")
 
 set(SOURCES
-	src/snabb.c)
+	src/snabb.c
+	src/transform.c)
 
 if (PLUGIN)
 	add_library(${CMAKE_PROJECT_NAME} MODULE ${SOURCES})
