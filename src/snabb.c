@@ -136,7 +136,7 @@ sigint_handler(int signum)
 }
 
 int
-main(int argc, char *argv[])
+main()
 {
 	INF_MSG("Plugin application mode initialized");
 	sr_conn_ctx_t *connection = NULL;
