@@ -35,12 +35,11 @@
 const char *YANG_MODEL = "snabb-softwire-v1";
 
 static void
-print_change(sr_change_oper_t op, sr_val_t *old_val, sr_val_t *new_val) {
+apply_change(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t *new_val) {
 	switch(op) {
 	case SR_OP_CREATED:
 		if (NULL != new_val) {
-			printf("CREATED: ");
-			sr_print_val(new_val);
+			add_action(new_val, op);
 		}
 		break;
 	case SR_OP_DELETED:
@@ -56,6 +55,8 @@ print_change(sr_change_oper_t op, sr_val_t *old_val, sr_val_t *new_val) {
 			sr_print_val(old_val);
 			printf("new value ");
 			sr_print_val(new_val);
+
+			add_action(new_val, op);
 		}
 	break;
 	case SR_OP_MOVED:
@@ -64,6 +65,8 @@ print_change(sr_change_oper_t op, sr_val_t *old_val, sr_val_t *new_val) {
 		}
 	break;
 	}
+
+	return;
 }
 
 const char *
@@ -120,7 +123,7 @@ parse_config(sr_session_ctx_t *session, const char *module_name, ctx_t *ctx) {
 	}
 
 	while (SR_ERR_OK == (rc = sr_get_change_next(session, it, &oper, &old_value, &new_value))) {
-		print_change(oper, old_value, new_value);
+		apply_change(ctx, oper, old_value, new_value);
 		sr_free_val(old_value);
 		sr_free_val(new_value);
 	}
@@ -139,7 +142,7 @@ module_change_cb(sr_session_ctx_t *session, const char *module_name, sr_notif_ev
 	ctx_t *ctx = private_ctx;
 	INF("%s configuration has changed.", ctx->yang_model);
 
-	printf("\n\n ========== Notification  %s =============================================", ev_to_str(event));
+	printf("\n\n ========== Notification  %s =============================================\n", ev_to_str(event));
 	if (SR_EV_APPLY == event) {
 		return SR_ERR_OK;
 	}
@@ -186,7 +189,11 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
 	//rc = socket_send(ctx, message, SB_SET);
 	//CHECK_RET(rc, error, "failed socket_send for message %s", message);
 
-	sysrepo_to_snabb(ctx, SR_OP_MODIFIED, "/snabb-softwire-v1:softwire-config/external-interface/error-rate-limiting/packets", "600020");
+	//sysrepo_to_snabb(ctx, SR_OP_MODIFIED, "/snabb-softwire-v1:softwire-config/external-interface/error-rate-limiting/packets", "600020");
+
+	/* initialize action list */
+	LIST_HEAD(listhead, action_s) head;
+	LIST_INIT(&head);
 
 	return SR_ERR_OK;
 

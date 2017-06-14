@@ -23,6 +23,7 @@
 #define TRANSFORM_H
 
 #include <sysrepo.h>
+#include <sys/queue.h>
 
 
 #define XPATH_MAX_LEN     128
@@ -49,10 +50,23 @@ typedef struct ctx_s {
 	sr_subscription_ctx_t *sub;
 } ctx_t;
 
+typedef struct action_s {
+	char *xpath;
+	char *value;
+	sr_type_t type;
+	sr_change_oper_t op;
+	LIST_ENTRY(action_s) actions;
+} action_t;
+LIST_HEAD(listhead, action_s) head;
+
 int socket_connect(ctx_t *ctx);
 int socket_send(ctx_t *ctx, char *message, sb_command_t command);
 void socket_close(ctx_t *ctx);
 
-int sysrepo_to_snabb(ctx_t *ctx, sr_notif_event_t event, char *xpath, char *value);
+
+int sysrepo_to_snabb(ctx_t *ctx, sb_command_t command, char *xpath, char *value);
+int add_action(sr_val_t *val, sr_change_oper_t op);
+void free_action(action_t *action);
+int apply_action(ctx_t *ctx, action_t *action);
 
 #endif /* TRANSFORM_H */

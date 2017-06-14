@@ -33,6 +33,14 @@
 #include "common.h"
 #include "transform.h"
 
+bool list_or_container(sr_type_t type) {
+	return type == SR_LIST_T || type == SR_CONTAINER_T || type == SR_CONTAINER_PRESENCE_T;
+}
+
+bool leaf_without_value(sr_type_t type) {
+	return type == SR_UNKNOWN_T || type == SR_LEAF_EMPTY_T;
+}
+
 char *concat(const char *s1, const char *s2) {
 	char *result = NULL;
 
@@ -147,18 +155,9 @@ failed:
 }
 
 int
-sysrepo_to_snabb(ctx_t *ctx, sr_notif_event_t event, char *xpath, char *value) {
+sysrepo_to_snabb(ctx_t *ctx, sb_command_t command, char *xpath, char *value) {
 	int  rc = SR_ERR_OK;
-	sb_command_t command;
 	char *xpath_substring;
-
-	/* create snabb command */
-	switch(event) {
-	case SR_OP_MODIFIED:
-		command = SB_SET;
-	default:
-		command = SB_SET;
-	}
 
 	/* transform sysrepo xpath to snabb xpath
 	 * skip the first N characters '/<yang_model>:'
@@ -169,7 +168,80 @@ sysrepo_to_snabb(ctx_t *ctx, sr_notif_event_t event, char *xpath, char *value) {
 	char message[SNABB_MESSAGE_MAX];
 	snprintf(message, SNABB_MESSAGE_MAX, "set-config {path '/%s'; config '%s'; schema %s;}", xpath_substring, value, ctx->yang_model);
 
+	/* send to socket */
+	INF_MSG("send to socket");
 	socket_send(ctx, message, command);
+
+	return rc;
+}
+
+int
+add_action(sr_val_t *val, sr_change_oper_t op) {
+	int rc = SR_ERR_OK;
+
+	action_t *action = malloc(sizeof(action_t));
+    if (!list_or_container(val->type) && !leaf_without_value(val->type) && SR_OP_MODIFIED == op) {
+		action->value = sr_val_to_str(val);
+		if (NULL == action->value) {
+			free(action);
+			return SR_ERR_DATA_MISSING;
+		}
+	} else if (!list_or_container(val->type) && SR_OP_CREATED == op) {
+		/* check if a list/container is already in the list */
+		action_t *tmp;
+		LIST_FOREACH(tmp, &head, actions) {
+				if (NULL == action) {
+					continue;
+				}
+			if (strncmp(val->xpath, tmp->xpath, strlen(val->xpath)) && list_or_container(tmp->type)) {
+				free(action);
+				return rc;
+			}
+		}
+		action->value = NULL;
+	} else {
+		action->value = NULL;
+	}
+	action->xpath = strdup(val->xpath);
+	action->op = op;
+	action->type = val->type;
+	LIST_INSERT_HEAD(&head, action, actions);
+
+	INF("Add liste entry: xpath: %s, value: %s, op: %d", action->xpath, action->value, action->op);
+
+	return rc;
+}
+
+void
+free_action(action_t *action) {
+	free(action->xpath);
+	if (NULL != action->value) {
+		free(action->value);
+	}
+	free(action);
+}
+
+int
+apply_action(ctx_t *ctx, action_t *action) {
+	char *xpath_substring;
+	sb_command_t command;
+	int rc = SR_ERR_OK;
+
+	/* translate sysrepo operation to snabb command */
+	switch(action->op) {
+	case SR_OP_MODIFIED:
+		command = SB_SET;
+	default:
+		command = SB_SET;
+	}
+
+	/* transform sysrepo xpath to snabb xpath
+	 * skip the first N characters '/<yang_model>:'
+	 * N = '/' + ':' + 'length of yang model'
+	 */
+	xpath_substring = action->xpath + ((2 + strlen(ctx->yang_model)) * sizeof *action->xpath);
+
+	rc = sysrepo_to_snabb(ctx, command, xpath_substring, action->value);
 
 	return rc;
 }
