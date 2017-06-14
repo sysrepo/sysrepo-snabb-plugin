@@ -143,7 +143,7 @@ int socket_send(ctx_t *ctx, char *message, sb_command_t command) {
 	}
 
 	/* set null terminated string at the beggining */
-	ch[0] = 0;
+	ch[0] = '\0';
 
 	/* based on the leader.lua file */
 
@@ -153,20 +153,111 @@ failed:
 	WRN("Respons:\n%s", ch);
 	return SR_ERR_INTERNAL;
 }
+/*
+local function print_trees(trees, xpath, action)
+
+   local function print_list(tree)
+      local result = ""
+      if (tree == nil) then return "" end
+      while true do
+         if tree == nil then break
+         elseif tree:type() == sr.SR_LIST_T or tree:type() == sr.SR_CONTAINER_T or tree:type() == sr.SR_CONTAINER_PRESENCE_T then
+            result = result.." "..tree:name().." { "..print_list(tree:first_child()).."}"
+         else
+            if not (xpath_lib.is_key(xpath.."/"..tree:name()) and action == "set") then
+               result = result.." "..tree:name().." "..print_value(tree)..";"
+            end
+         end
+         tree = tree:next()
+      end
+      return result
+   end
+
+end
+*/
+
+int double_message_size(char **message, int *len) {
+	int rc = SR_ERR_OK;
+	*len = *len * 2;
+	*message = (char *) realloc(*message, sizeof(*message) * (*len));
+	if (NULL != *message) {
+		return SR_ERR_NOMEM;
+	}
+
+	return rc;
+}
+
+int fill_list(sr_node_t *tree, char **message, int *len) {
+	int rc = SR_ERR_OK;
+
+	if (NULL == tree) {
+		return rc;
+	}
+	while(true) {
+		if (*len < XPATH_MAX_LEN + strlen(*message)) {
+			double_message_size(message, len);
+		}
+		if (NULL == tree) {
+			break;
+		} else if (list_or_container(tree->type)) {
+			//TODO check for error
+			strcpy(*message, tree->name);
+			strcpy(*message, " { ");
+			rc = fill_list(tree->first_child, message, len);
+			CHECK_RET(rc, cleanup, "failed fill_list: %s", sr_strerror(rc));
+			strcpy(*message, " } ");
+		} else {
+			//TODO check for error
+			strcpy(*message, tree->name);
+			strcpy(*message, " ");
+			strcpy(*message, sr_val_to_str((sr_val_t *) tree));
+			strcpy(*message, " ;");
+		}
+		tree = tree->next;
+	}
+
+cleanup:
+	return rc;
+}
 
 int
-sysrepo_to_snabb(ctx_t *ctx, sb_command_t command, char *xpath, char *value) {
+xpath_to_snabb(char **message, char *xpath, sr_session_ctx_t *sess) {
+	int rc = SR_ERR_OK;
+	int len = SNABB_MESSAGE_MAX;
+	*message = malloc(sizeof(*message) * len);
+	*message = '\0';
+
+	INF("strlen(message) = %d", strlen(*message));
+
+	sr_node_t *trees = NULL;
+	long unsigned int tree_cnt = 0;
+	rc = sr_get_subtrees(sess, xpath, SR_GET_SUBTREE_DEFAULT, &trees, &tree_cnt);
+	CHECK_RET(rc, error, "failed sr_get_subtrees: %s", sr_strerror(rc));
+
+	rc = fill_list(trees, message, &len);
+	CHECK_RET(rc, error, "failed to create snabb configuration data: %s", sr_strerror(rc));
+
+	return rc;
+error:
+	if (NULL != message) {
+		free(message);
+	}
+	return rc;
+}
+int
+sysrepo_to_snabb(ctx_t *ctx, sb_command_t command, action_t *action) {
 	int  rc = SR_ERR_OK;
 	char *xpath_substring;
 
 	/* transform sysrepo xpath to snabb xpath
 	 * skip the first N characters '/<yang_model>:'
+	 * N = '/' + ':' + 'length of yang model'
 	 */
-	xpath_substring = xpath + ((2 + strlen(ctx->yang_model)) * sizeof *xpath_substring);
+	xpath_substring = action->xpath + ((2 + strlen(ctx->yang_model)) * sizeof *xpath_substring);
 
 	//TODO make dynamic
 	char message[SNABB_MESSAGE_MAX];
-	snprintf(message, SNABB_MESSAGE_MAX, "set-config {path '/%s'; config '%s'; schema %s;}", xpath_substring, value, ctx->yang_model);
+	snprintf(message, SNABB_MESSAGE_MAX, "set-config {path '/%s'; config '%s'; schema %s;}", xpath_substring, action->value, ctx->yang_model);
 
 	/* send to socket */
 	INF_MSG("send to socket");
@@ -223,7 +314,6 @@ free_action(action_t *action) {
 
 int
 apply_action(ctx_t *ctx, action_t *action) {
-	char *xpath_substring;
 	sb_command_t command;
 	int rc = SR_ERR_OK;
 
@@ -235,13 +325,7 @@ apply_action(ctx_t *ctx, action_t *action) {
 		command = SB_SET;
 	}
 
-	/* transform sysrepo xpath to snabb xpath
-	 * skip the first N characters '/<yang_model>:'
-	 * N = '/' + ':' + 'length of yang model'
-	 */
-	xpath_substring = action->xpath + ((2 + strlen(ctx->yang_model)) * sizeof *action->xpath);
-
-	rc = sysrepo_to_snabb(ctx, command, xpath_substring, action->value);
+	rc = sysrepo_to_snabb(ctx, command, action);
 
 	return rc;
 }

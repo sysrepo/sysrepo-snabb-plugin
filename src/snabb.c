@@ -142,6 +142,8 @@ module_change_cb(sr_session_ctx_t *session, const char *module_name, sr_notif_ev
 	ctx_t *ctx = private_ctx;
 	INF("%s configuration has changed.", ctx->yang_model);
 
+	ctx->sess = session;
+
 	printf("\n\n ========== Notification  %s =============================================\n", ev_to_str(event));
 	if (SR_EV_APPLY == event) {
 		return SR_ERR_OK;
