@@ -197,6 +197,17 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
 	LIST_HEAD(listhead, action_s) head;
 	LIST_INIT(&head);
 
+	/* test */
+	char *message = NULL;
+	rc = xpath_to_snabb(&message, "/snabb-softwire-v1:softwire-config/binding-table/softwire[ipv4='178.79.150.15'][psid='1'][padding='0']", session);
+	CHECK_RET(rc, error, "failed xpath_to_snabb: %s", sr_strerror(rc));
+	INF("MESSAGE:\n%s", message);
+	free(message);
+
+	message = NULL;
+	rc = xpath_to_snabb(&message, "/snabb-softwire-v1:*//*", session);
+	CHECK_RET(rc, error, "failed xpath_to_snabb: %s", sr_strerror(rc));
+	INF("MESSAGE:\n%s", message);
 	return SR_ERR_OK;
 
 error:

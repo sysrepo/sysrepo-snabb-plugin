@@ -201,17 +201,17 @@ int fill_list(sr_node_t *tree, char **message, int *len) {
 			break;
 		} else if (list_or_container(tree->type)) {
 			//TODO check for error
-			strcpy(*message, tree->name);
-			strcpy(*message, " { ");
+			strcat(*message, tree->name);
+			strcat(*message, " { ");
 			rc = fill_list(tree->first_child, message, len);
 			CHECK_RET(rc, cleanup, "failed fill_list: %s", sr_strerror(rc));
-			strcpy(*message, " } ");
+			strcat(*message, " } ");
 		} else {
 			//TODO check for error
-			strcpy(*message, tree->name);
-			strcpy(*message, " ");
-			strcpy(*message, sr_val_to_str((sr_val_t *) tree));
-			strcpy(*message, " ;");
+			strcat(*message, tree->name);
+			strcat(*message, " ");
+			strcat(*message, sr_val_to_str((sr_val_t *) tree));
+			strcat(*message, "; ");
 		}
 		tree = tree->next;
 	}
@@ -225,17 +225,24 @@ xpath_to_snabb(char **message, char *xpath, sr_session_ctx_t *sess) {
 	int rc = SR_ERR_OK;
 	int len = SNABB_MESSAGE_MAX;
 	*message = malloc(sizeof(*message) * len);
-	*message = '\0';
-
-	INF("strlen(message) = %d", strlen(*message));
+	*message[0] = '\0';
 
 	sr_node_t *trees = NULL;
 	long unsigned int tree_cnt = 0;
 	rc = sr_get_subtrees(sess, xpath, SR_GET_SUBTREE_DEFAULT, &trees, &tree_cnt);
 	CHECK_RET(rc, error, "failed sr_get_subtrees: %s", sr_strerror(rc));
 
-	rc = fill_list(trees, message, &len);
-	CHECK_RET(rc, error, "failed to create snabb configuration data: %s", sr_strerror(rc));
+	if (1 == tree_cnt) {
+		strcat(*message, " { ");
+		rc = fill_list(trees->first_child, message, &len);
+		CHECK_RET(rc, error, "failed to create snabb configuration data: %s", sr_strerror(rc));
+		strcat(*message, " } ");
+	} else {
+		for (int i = 0; i < tree_cnt; i++) {
+			rc = fill_list(&trees[i], message, &len);
+			CHECK_RET(rc, error, "failed to create snabb configuration data: %s", sr_strerror(rc));
+		}
+	}
 
 	return rc;
 error:
