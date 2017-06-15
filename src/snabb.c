@@ -207,11 +207,12 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
 
 	//tmp = NULL;
 	//message = &tmp;
-	//rc = xpath_to_snabb(message, "/snabb-softwire-v1:*//*", session);
+	////TODO discard state data
+	//rc = xpath_to_snabb(&tmp, "/snabb-softwire-v1:*", session);
 	//CHECK_RET(rc, error, "failed xpath_to_snabb: %s", sr_strerror(rc));
-	//INF("MESSAGE:\n%s", *message);
+	//INF("MESSAGE:\n%s", tmp);
 	//free(*message);
-	return SR_ERR_OK;
+	//return SR_ERR_OK;
 
 error:
 	ERR("%s plugin initialization failed: %s", ctx->yang_model, sr_strerror(rc));
