@@ -153,28 +153,6 @@ failed:
 	WRN("Respons:\n%s", ch);
 	return SR_ERR_INTERNAL;
 }
-/*
-local function print_trees(trees, xpath, action)
-
-   local function print_list(tree)
-      local result = ""
-      if (tree == nil) then return "" end
-      while true do
-         if tree == nil then break
-         elseif tree:type() == sr.SR_LIST_T or tree:type() == sr.SR_CONTAINER_T or tree:type() == sr.SR_CONTAINER_PRESENCE_T then
-            result = result.." "..tree:name().." { "..print_list(tree:first_child()).."}"
-         else
-            if not (xpath_lib.is_key(xpath.."/"..tree:name()) and action == "set") then
-               result = result.." "..tree:name().." "..print_value(tree)..";"
-            end
-         end
-         tree = tree:next()
-      end
-      return result
-   end
-
-end
-*/
 
 int double_message_size(char **message, int *len) {
 	int rc = SR_ERR_OK;
@@ -299,19 +277,26 @@ add_action(sr_val_t *val, sr_change_oper_t op) {
 			free(action);
 			return SR_ERR_DATA_MISSING;
 		}
-	} else if (!list_or_container(val->type) && SR_OP_CREATED == op) {
+	} else if (!list_or_container(val->type) && (SR_OP_CREATED == op || SR_OP_DELETED == op)) {
 		/* check if a list/container is already in the list */
 		action_t *tmp;
 		LIST_FOREACH(tmp, &head, actions) {
-				if (NULL == action) {
-					continue;
-				}
-			if (strncmp(val->xpath, tmp->xpath, strlen(val->xpath)) && list_or_container(tmp->type)) {
+			if (0 == strncmp(val->xpath, tmp->xpath, strlen(tmp->xpath)) && list_or_container(tmp->type)) {
 				free(action);
 				return rc;
 			}
 		}
 		action->value = NULL;
+	} else if (list_or_container(val->type) && (SR_OP_CREATED == op || SR_OP_DELETED == op)) {
+		/* if a list/container is created/deleted remove previous entries of child nodes */
+		action_t *tmp;
+		LIST_FOREACH(tmp, &head, actions) {
+			if (0 == strncmp(val->xpath, tmp->xpath, strlen(val->xpath))) {
+				LIST_REMOVE(tmp, actions);
+			}
+		}
+		action->value = NULL;
+
 	} else {
 		action->value = NULL;
 	}

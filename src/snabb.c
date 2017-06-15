@@ -34,40 +34,41 @@
 
 const char *YANG_MODEL = "snabb-softwire-v1";
 
-static void
+static int
 apply_change(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t *new_val) {
+	int rc;
+
 	switch(op) {
 	case SR_OP_CREATED:
 		if (NULL != new_val) {
-			add_action(new_val, op);
+			rc = add_action(new_val, op);
+			CHECK_RET(rc, error, "failed to add operation: %s", sr_strerror(rc));
 		}
 		break;
 	case SR_OP_DELETED:
 		if (NULL != old_val) {
-			printf("DELETED: ");
-			sr_print_val(old_val);
-			add_action(old_val, op);
+			rc = add_action(old_val, op);
+			CHECK_RET(rc, error, "failed to add operation: %s", sr_strerror(rc));
 		}
 	break;
 	case SR_OP_MODIFIED:
 		if (NULL != old_val && NULL != new_val) {
-			printf("MODIFIED: ");
-			printf("old value ");
-			sr_print_val(old_val);
-			printf("new value ");
-			sr_print_val(new_val);
-
-			add_action(new_val, op);
+			rc = add_action(new_val, op);
+			CHECK_RET(rc, error, "failed to add operation: %s", sr_strerror(rc));
 		}
 	break;
 	case SR_OP_MOVED:
 		if (NULL != new_val) {
+			//TODO implement this
 			printf("MOVED: %s after %s", new_val->xpath, NULL != old_val ? old_val->xpath : NULL);
 		}
 	break;
 	}
 
-	return;
+	return rc;
+error:
+	//TODO free list
+	return rc;
 }
 
 const char *
@@ -124,11 +125,16 @@ parse_config(sr_session_ctx_t *session, const char *module_name, ctx_t *ctx) {
 	}
 
 	while (SR_ERR_OK == (rc = sr_get_change_next(session, it, &oper, &old_value, &new_value))) {
-		apply_change(ctx, oper, old_value, new_value);
+		rc = apply_change(ctx, oper, old_value, new_value);
 		sr_free_val(old_value);
 		sr_free_val(new_value);
+		CHECK_RET(rc, cleanup, "failed to add operation: %s", sr_strerror(rc));
 	}
 
+		action_t *tmp = NULL;
+		LIST_FOREACH(tmp, &head, actions) {
+			INF("XPATH %s, VALUE %s\n", tmp->xpath, tmp->value);
+		}
 	return rc;
 
 cleanup:
