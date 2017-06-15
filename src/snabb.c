@@ -121,14 +121,14 @@ parse_config(sr_session_ctx_t *session, const char *module_name, ctx_t *ctx) {
 	rc = sr_get_changes_iter(session, xpath , &it);
 	if (SR_ERR_OK != rc) {
 		printf("Get changes iter failed for xpath %s", xpath);
-		goto cleanup;
+		goto error;
 	}
 
 	while (SR_ERR_OK == (rc = sr_get_change_next(session, it, &oper, &old_value, &new_value))) {
 		rc = apply_change(ctx, oper, old_value, new_value);
 		sr_free_val(old_value);
 		sr_free_val(new_value);
-		CHECK_RET(rc, cleanup, "failed to add operation: %s", sr_strerror(rc));
+		CHECK_RET(rc, error, "failed to add operation: %s", sr_strerror(rc));
 	}
 
 	action_t *tmp = NULL;
@@ -136,16 +136,17 @@ parse_config(sr_session_ctx_t *session, const char *module_name, ctx_t *ctx) {
 		INF("Add liste entry: xpath: %s, value: %s, op: %d", tmp->xpath, tmp->value, tmp->op);
 	}
 
-	clear_all_actions();
+	rc = apply_all_actions(ctx);
+	CHECK_RET(rc, error, "failed execute all operations: %s", sr_strerror(rc));
 
-	sr_free_change_iter(it);
-
+error:
+	if (NULL != it) {
+		sr_free_change_iter(it);
+	}
+	if(!LIST_EMPTY(&head)) {
+		clear_all_actions();
+	}
 	return rc;
-
-cleanup:
-	sr_free_change_iter(it);
-
-	return SR_ERR_INTERNAL;
 }
 
 

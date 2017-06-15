@@ -319,6 +319,7 @@ free_action(action_t *action) {
 	}
 	free(action);
 }
+
 void
 clear_all_actions() {
 	action_t *tmp = NULL;
@@ -327,6 +328,20 @@ clear_all_actions() {
 		LIST_REMOVE(tmp, actions);
 		free_action(tmp);
 	}
+}
+
+int
+apply_all_actions(ctx_t *ctx) {
+	int rc = SR_ERR_OK;
+	action_t *tmp;
+	LIST_FOREACH(tmp, &head, actions) {
+		rc = apply_action(ctx, tmp);
+		CHECK_RET(rc, error, "failed apply action: %s", sr_strerror(rc));
+	}
+
+	clear_all_actions();
+error:
+	return rc;
 }
 
 int

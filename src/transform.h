@@ -69,6 +69,7 @@ int sysrepo_to_snabb(ctx_t *ctx, sb_command_t command, action_t *action);
 
 int add_action(sr_val_t *val, sr_change_oper_t op);
 void clear_all_actions();
+int apply_all_actions(ctx_t *ctx);
 void free_action(action_t *action);
 int apply_action(ctx_t *ctx, action_t *action);
 
