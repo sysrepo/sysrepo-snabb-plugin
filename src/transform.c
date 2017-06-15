@@ -289,15 +289,17 @@ add_action(sr_val_t *val, sr_change_oper_t op) {
 		action->value = NULL;
 	} else if (list_or_container(val->type) && (SR_OP_CREATED == op || SR_OP_DELETED == op)) {
 		/* if a list/container is created/deleted remove previous entries of child nodes */
-		action_t *tmp;
-		LIST_FOREACH(tmp, &head, actions) {
+		action_t *tmp, *tmp2;
+		tmp = LIST_FIRST(&head);
+		while (NULL != tmp) {
+			tmp2 = LIST_NEXT(tmp, actions);
 			if (0 == strncmp(val->xpath, tmp->xpath, strlen(val->xpath))) {
 				LIST_REMOVE(tmp, actions);
 				free_action(tmp);
 			}
+			tmp = tmp2;
 		}
 		action->value = NULL;
-
 	} else {
 		action->value = NULL;
 	}
