@@ -293,6 +293,7 @@ add_action(sr_val_t *val, sr_change_oper_t op) {
 		LIST_FOREACH(tmp, &head, actions) {
 			if (0 == strncmp(val->xpath, tmp->xpath, strlen(val->xpath))) {
 				LIST_REMOVE(tmp, actions);
+				free_action(tmp);
 			}
 		}
 		action->value = NULL;
