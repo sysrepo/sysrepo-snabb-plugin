@@ -131,10 +131,10 @@ parse_config(sr_session_ctx_t *session, const char *module_name, ctx_t *ctx) {
 		CHECK_RET(rc, cleanup, "failed to add operation: %s", sr_strerror(rc));
 	}
 
-		action_t *tmp = NULL;
-		LIST_FOREACH(tmp, &head, actions) {
-			INF("XPATH %s, VALUE %s\n", tmp->xpath, tmp->value);
-		}
+	action_t *tmp = NULL;
+	LIST_FOREACH(tmp, &head, actions) {
+		INF("Add liste entry: xpath: %s, value: %s, op: %d", tmp->xpath, tmp->value, tmp->op);
+	}
 	return rc;
 
 cleanup:

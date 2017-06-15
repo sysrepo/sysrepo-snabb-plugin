@@ -306,8 +306,6 @@ add_action(sr_val_t *val, sr_change_oper_t op) {
 	action->type = val->type;
 	LIST_INSERT_HEAD(&head, action, actions);
 
-	INF("Add liste entry: xpath: %s, value: %s, op: %d", action->xpath, action->value, action->op);
-
 	return rc;
 }
 
