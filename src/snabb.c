@@ -46,6 +46,7 @@ apply_change(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t *new_v
 		if (NULL != old_val) {
 			printf("DELETED: ");
 			sr_print_val(old_val);
+			add_action(old_val, op);
 		}
 	break;
 	case SR_OP_MODIFIED:
@@ -212,7 +213,7 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
 	//CHECK_RET(rc, error, "failed xpath_to_snabb: %s", sr_strerror(rc));
 	//INF("MESSAGE:\n%s", tmp);
 	//free(*message);
-	//return SR_ERR_OK;
+	return SR_ERR_OK;
 
 error:
 	ERR("%s plugin initialization failed: %s", ctx->yang_model, sr_strerror(rc));
