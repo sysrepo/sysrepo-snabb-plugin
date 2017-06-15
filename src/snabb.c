@@ -138,6 +138,8 @@ parse_config(sr_session_ctx_t *session, const char *module_name, ctx_t *ctx) {
 
 	clear_all_actions();
 
+	sr_free_change_iter(it);
+
 	return rc;
 
 cleanup:
