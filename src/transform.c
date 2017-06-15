@@ -240,10 +240,14 @@ xpath_to_snabb(char **message, char *xpath, sr_session_ctx_t *sess) {
 	CHECK_RET(rc, error, "failed sr_get_subtrees: %s", sr_strerror(rc));
 
 	if (1 == tree_cnt) {
-		strcat(*message, " { ");
+		if (SR_LIST_T == trees[0].type) {
+			strcat(*message, " { ");
+		}
 		rc = fill_list(trees->first_child, message, &len);
 		CHECK_RET(rc, error, "failed to create snabb configuration data: %s", sr_strerror(rc));
-		strcat(*message, " } ");
+		if (SR_LIST_T == trees[0].type) {
+			strcat(*message, " } ");
+		}
 	} else {
 		for (int i = 0; i < tree_cnt; i++) {
 			rc = fill_list(&trees[i], message, &len);
