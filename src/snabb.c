@@ -135,6 +135,9 @@ parse_config(sr_session_ctx_t *session, const char *module_name, ctx_t *ctx) {
 	LIST_FOREACH(tmp, &head, actions) {
 		INF("Add liste entry: xpath: %s, value: %s, op: %d", tmp->xpath, tmp->value, tmp->op);
 	}
+
+	clear_all_actions();
+
 	return rc;
 
 cleanup:

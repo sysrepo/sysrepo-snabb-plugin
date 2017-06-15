@@ -317,6 +317,13 @@ free_action(action_t *action) {
 	}
 	free(action);
 }
+void
+clear_all_actions() {
+	action_t *tmp = NULL;
+	LIST_FOREACH(tmp, &head, actions) {
+		free_action(tmp);
+	}
+}
 
 int
 apply_action(ctx_t *ctx, action_t *action) {
