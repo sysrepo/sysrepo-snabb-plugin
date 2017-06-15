@@ -320,7 +320,8 @@ free_action(action_t *action) {
 void
 clear_all_actions() {
 	action_t *tmp = NULL;
-	LIST_FOREACH(tmp, &head, actions) {
+	while (!LIST_EMPTY(&head)) {
+		tmp = LIST_FIRST(&head);
 		LIST_REMOVE(tmp, actions);
 		free_action(tmp);
 	}
