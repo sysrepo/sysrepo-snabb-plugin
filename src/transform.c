@@ -321,6 +321,7 @@ void
 clear_all_actions() {
 	action_t *tmp = NULL;
 	LIST_FOREACH(tmp, &head, actions) {
+		LIST_REMOVE(tmp, actions);
 		free_action(tmp);
 	}
 }
