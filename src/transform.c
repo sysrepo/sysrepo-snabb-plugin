@@ -251,10 +251,14 @@ xpath_to_snabb(char **message, char *xpath, sr_session_ctx_t *sess) {
 		}
 	}
 
+	sr_free_trees(trees, tree_cnt);
 	return rc;
 error:
 	if (NULL != message) {
 		free(message);
+	}
+	if (NULL != trees) {
+		sr_free_trees(trees, tree_cnt);
 	}
 	return rc;
 }
