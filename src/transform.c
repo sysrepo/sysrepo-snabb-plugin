@@ -178,11 +178,15 @@ end
 
 int double_message_size(char **message, int *len) {
 	int rc = SR_ERR_OK;
+	char *tmp = NULL;
+
 	*len = *len * 2;
-	*message = (char *) realloc(*message, sizeof(*message) * (*len));
-	if (NULL != *message) {
+	tmp = (char *) realloc(*message, (*len));
+	if (NULL == tmp) {
 		return SR_ERR_NOMEM;
 	}
+
+	*message = tmp;
 
 	return rc;
 }
@@ -195,7 +199,8 @@ int fill_list(sr_node_t *tree, char **message, int *len) {
 	}
 	while(true) {
 		if (*len < XPATH_MAX_LEN + strlen(*message)) {
-			double_message_size(message, len);
+			rc = double_message_size(message, len);
+			CHECK_RET(rc, cleanup, "failed to double the buffer size: %s", sr_strerror(rc));
 		}
 		if (NULL == tree) {
 			break;
@@ -210,7 +215,9 @@ int fill_list(sr_node_t *tree, char **message, int *len) {
 			//TODO check for error
 			strcat(*message, tree->name);
 			strcat(*message, " ");
-			strcat(*message, sr_val_to_str((sr_val_t *) tree));
+			char *value = sr_val_to_str((sr_val_t *) tree);
+			strcat(*message, value);
+			free(value);
 			strcat(*message, "; ");
 		}
 		tree = tree->next;
