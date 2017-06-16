@@ -62,17 +62,9 @@ typedef struct action_s {
 LIST_HEAD(listhead, action_s) head;
 
 int socket_connect(ctx_t *ctx);
-int socket_send(ctx_t *ctx, char *message, sb_command_t command);
 void socket_close(ctx_t *ctx);
 
-int format_xpath(ctx_t *ctx, action_t *action);
-int xpath_to_snabb(ctx_t *ctx, action_t *action, char **message);
-int sysrepo_to_snabb(ctx_t *ctx, action_t *action);
-
 int add_action(sr_val_t *val, sr_change_oper_t op);
-void clear_all_actions();
 int apply_all_actions(ctx_t *ctx);
-void free_action(action_t *action);
-int apply_action(ctx_t *ctx, action_t *action);
 
 #endif /* TRANSFORM_H */

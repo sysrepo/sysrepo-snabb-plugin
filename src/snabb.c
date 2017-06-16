@@ -35,8 +35,8 @@
 const char *YANG_MODEL = "snabb-softwire-v1";
 
 static int
-apply_change(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t *new_val) {
-	int rc;
+apply_change(sr_change_oper_t op, sr_val_t *old_val, sr_val_t *new_val) {
+	int rc = SR_ERR_OK;
 
 	switch(op) {
 	case SR_OP_CREATED:
@@ -125,7 +125,7 @@ parse_config(sr_session_ctx_t *session, const char *module_name, ctx_t *ctx) {
 	}
 
 	while (SR_ERR_OK == (rc = sr_get_change_next(session, it, &oper, &old_value, &new_value))) {
-		rc = apply_change(ctx, oper, old_value, new_value);
+		rc = apply_change(oper, old_value, new_value);
 		sr_free_val(old_value);
 		sr_free_val(new_value);
 		CHECK_RET(rc, error, "failed to add operation: %s", sr_strerror(rc));
@@ -261,7 +261,7 @@ sr_plugin_cleanup_cb(sr_session_ctx_t *session, void *private_ctx) {
 volatile int exit_application = 0;
 
 static void
-sigint_handler(int signum) {
+sigint_handler(__attribute__((unused)) int signum) {
 	INF_MSG("Sigint called, exiting...");
 	exit_application = 1;
 }

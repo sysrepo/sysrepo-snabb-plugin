@@ -33,6 +33,16 @@
 #include "common.h"
 #include "transform.h"
 
+int socket_send(ctx_t *ctx, char *message, sb_command_t command);
+int format_xpath(ctx_t *ctx, action_t *action);
+int xpath_to_snabb(ctx_t *ctx, action_t *action, char **message);
+int sysrepo_to_snabb(ctx_t *ctx, action_t *action);
+int add_action(sr_val_t *val, sr_change_oper_t op);
+void clear_all_actions();
+void free_action(action_t *action);
+int apply_action(ctx_t *ctx, action_t *action);
+
+
 bool list_or_container(sr_type_t type) {
 	return type == SR_LIST_T || type == SR_CONTAINER_T || type == SR_CONTAINER_PRESENCE_T;
 }
