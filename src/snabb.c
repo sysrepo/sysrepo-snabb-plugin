@@ -227,6 +227,9 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
 	//INF("MESSAGE:\n%s", tmp);
 	//free(*message);
 
+	rc = sysrepo_datastore_to_snabb(ctx);
+	CHECK_RET(rc, error, "failed to apply sysrepo startup data to snabb: %s", sr_strerror(rc));
+
 	return SR_ERR_OK;
 
 error:

@@ -291,7 +291,6 @@ sysrepo_to_snabb(ctx_t *ctx, action_t *action) {
 
 	rc = format_xpath(ctx, action);
 	CHECK_RET(rc, error, "failed to format xpath: %s", sr_strerror(rc));
-	INF("new xpath %s\n\n", action->snabb_xpath);
 
 	/* translate sysrepo operation to snabb command */
 	switch(action->op) {
@@ -434,5 +433,64 @@ apply_action(ctx_t *ctx, action_t *action) {
 	//TODO create revrse list for rollback
 
 error:
+	return rc;
+}
+
+int
+sysrepo_datastore_to_snabb(ctx_t *ctx) {
+	sr_conn_ctx_t *connection = NULL;
+	sr_session_ctx_t *session = NULL, *tmp_session;
+
+	int rc = SR_ERR_OK;
+	char xpath[XPATH_MAX_LEN] = {0};
+
+	snprintf(xpath, XPATH_MAX_LEN, "/%s:*", ctx->yang_model);
+
+	/* connect to sysrepo */
+	rc = sr_connect(ctx->yang_model, SR_CONN_DEFAULT, &connection);
+	CHECK_RET(rc, error, "failed sr_connect: %s", sr_strerror(rc));
+
+	/* start session */
+	rc = sr_session_start(connection, SR_DS_STARTUP, SR_SESS_CONFIG_ONLY, &session);
+	CHECK_RET(rc, error, "failed sr_session_start: %s", sr_strerror(rc));
+
+	tmp_session = ctx->sess;
+	ctx->sess = session;
+
+	sr_node_t *trees = NULL;
+	long unsigned int tree_cnt = 0;
+	rc = sr_get_subtrees(session, xpath, SR_GET_SUBTREE_DEFAULT, &trees, &tree_cnt);
+	CHECK_RET(rc, error, "failed sr_get_subtrees: %s", sr_strerror(rc));
+
+	for (int i = 0; i < (int) tree_cnt; i++) {
+		action_t *action = malloc(sizeof(action_t));
+		if (NULL == action) {
+			goto error;
+		}
+		snprintf(xpath, XPATH_MAX_LEN, "/%s:%s", ctx->yang_model, trees[i].name);
+		action->xpath = strdup(xpath);
+		action->snabb_xpath = NULL;
+		action->op = SR_OP_CREATED;
+		action->type = trees[i].type;
+		LIST_INSERT_HEAD(&head, action, actions);
+	}
+
+	action_t *tmp = NULL;
+	LIST_FOREACH(tmp, &head, actions) {
+		INF("Add liste entry: xpath: %s, value: %s, op: %d", tmp->xpath, tmp->value, tmp->op);
+	}
+
+	rc = apply_all_actions(ctx);
+	CHECK_RET(rc, error, "failed execute all operations: %s", sr_strerror(rc));
+
+error:
+	if (NULL != session) {
+		sr_session_stop(session);
+	}
+	if (NULL != connection) {
+		sr_disconnect(connection);
+	}
+
+	ctx->sess = tmp_session;
 	return rc;
 }
