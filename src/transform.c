@@ -281,33 +281,48 @@ format_xpath(ctx_t *ctx, action_t *action) {
 int
 sysrepo_to_snabb(ctx_t *ctx, action_t *action) {
 	sb_command_t command;
+	char *message = NULL;
 	int  rc = SR_ERR_OK;
-
-	/* translate sysrepo operation to snabb command */
-	switch(action->op) {
-	case SR_OP_MODIFIED:
-		command = SB_SET;
-	case SR_OP_CREATED:
-		command = SB_ADD;
-	case SR_OP_DELETED:
-		command = SB_REMOVE;
-	default:
-		command = SB_SET;
-	}
 
 	rc = format_xpath(ctx, action);
 	CHECK_RET(rc, error, "failed to format xpath: %s", sr_strerror(rc));
 	INF("new xpath %s\n\n", action->snabb_xpath);
 
-	//TODO make dynamic
-	char message[SNABB_MESSAGE_MAX];
-	snprintf(message, SNABB_MESSAGE_MAX, "set-config {path '/%s'; config '%s'; schema %s;}", action->snabb_xpath, action->value, ctx->yang_model);
+	/* translate sysrepo operation to snabb command */
+	switch(action->op) {
+	case SR_OP_MODIFIED:
+		message = malloc(sizeof(message) + SNABB_MESSAGE_MAX + strlen(action->snabb_xpath) + strlen(ctx->yang_model));
+		if (NULL == action->snabb_xpath) {
+			return SR_ERR_NOMEM;
+		}
+		snprintf(message, SNABB_MESSAGE_MAX, "set-config {path '/%s'; config '%s'; schema %s;}", action->snabb_xpath, action->value, ctx->yang_model);
+		command = SB_SET;
+		break;
+	case SR_OP_CREATED:
+		//TODO implement this
+		command = SB_ADD;
+		break;
+	case SR_OP_DELETED:
+		message = malloc(sizeof(message) + SNABB_MESSAGE_MAX + strlen(action->snabb_xpath) + strlen(ctx->yang_model));
+		if (NULL == action->snabb_xpath) {
+			return SR_ERR_NOMEM;
+		}
+		snprintf(message, SNABB_MESSAGE_MAX, "remove-config {path '/%s'; schema %s;}", action->snabb_xpath, ctx->yang_model);
+		command = SB_REMOVE;
+		break;
+	default:
+		command = SB_SET;
+	}
 
 	/* send to socket */
 	INF_MSG("send to socket");
-	socket_send(ctx, message, command);
+	rc = socket_send(ctx, message, command);
+	CHECK_RET(rc, error, "failed to send message to snabb socket: %s", sr_strerror(rc));
 
 error:
+	if (NULL != message) {
+		free(message);
+	}
 	return rc;
 }
 
@@ -385,11 +400,15 @@ apply_all_actions(ctx_t *ctx) {
 	action_t *tmp;
 	LIST_FOREACH(tmp, &head, actions) {
 		rc = apply_action(ctx, tmp);
-		CHECK_RET(rc, error, "failed apply action: %s", sr_strerror(rc));
+		CHECK_RET(rc, rollback, "failed apply action: %s", sr_strerror(rc));
 	}
 
 	clear_all_actions();
-error:
+	return rc;
+
+rollback:
+	//TODO do a rollback
+	clear_all_actions();
 	return rc;
 }
 
@@ -398,8 +417,10 @@ apply_action(ctx_t *ctx, action_t *action) {
 	int rc = SR_ERR_OK;
 
 	rc = sysrepo_to_snabb(ctx, action);
+	CHECK_RET(rc, error, "failed to create snabb message: %s", sr_strerror(rc));
 
 	//TODO create revrse list for rollback
 
+error:
 	return rc;
 }

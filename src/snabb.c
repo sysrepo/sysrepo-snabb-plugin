@@ -143,9 +143,6 @@ error:
 	if (NULL != it) {
 		sr_free_change_iter(it);
 	}
-	if(!LIST_EMPTY(&head)) {
-		clear_all_actions();
-	}
 	return rc;
 }
 
