@@ -225,6 +225,7 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
 	//CHECK_RET(rc, error, "failed xpath_to_snabb: %s", sr_strerror(rc));
 	//INF("MESSAGE:\n%s", tmp);
 	//free(*message);
+
 	return SR_ERR_OK;
 
 error:

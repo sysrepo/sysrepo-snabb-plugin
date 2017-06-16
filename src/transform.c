@@ -244,25 +244,73 @@ error:
 	}
 	return rc;
 }
+
 int
-sysrepo_to_snabb(ctx_t *ctx, sb_command_t command, action_t *action) {
+format_xpath(ctx_t *ctx, action_t *action) {
 	int  rc = SR_ERR_OK;
-	char *xpath_substring;
+	int i,j = 0; /* iterators in for loop */
+
+	/* snabb xpath is smaller then sysrepo xpath */
+	action->snabb_xpath = malloc(sizeof(action->snabb_xpath) * (int) strlen(action->xpath));
+	if (NULL == action->snabb_xpath) {
+		return SR_ERR_NOMEM;
+	}
 
 	/* transform sysrepo xpath to snabb xpath
 	 * skip the first N characters '/<yang_model>:'
 	 * N = '/' + ':' + 'length of yang model'
 	 */
-	xpath_substring = action->xpath + ((2 + strlen(ctx->yang_model)) * sizeof *xpath_substring);
+	action->snabb_xpath = action->xpath + ((2 + strlen(ctx->yang_model)) * sizeof *action->snabb_xpath);
+
+	/* remove "'" from the key values in the xpath
+	 * transform psid-map[addr='178.79.150.1'] to psid-map[addr=178.79.150.1]
+	 */
+	for(i = 0; i < strlen(action->snabb_xpath); i++) {
+		if (action->snabb_xpath[i] == '\'' && action->snabb_xpath[i+1] == ']') {
+			i = i + 1;
+		}
+		action->snabb_xpath[j] = action->snabb_xpath[i];
+		j++;
+		if (action->snabb_xpath[i] == '=' && action->snabb_xpath[i+1] == '\'') {
+			i = i + 1;
+		}
+	}
+	/* add null terminated character */
+	action->snabb_xpath[j] = action->snabb_xpath[(int) strlen(action->snabb_xpath)];
+
+	return rc;
+}
+
+int
+sysrepo_to_snabb(ctx_t *ctx, action_t *action) {
+	sb_command_t command;
+	int  rc = SR_ERR_OK;
+
+	/* translate sysrepo operation to snabb command */
+	switch(action->op) {
+	case SR_OP_MODIFIED:
+		command = SB_SET;
+	case SR_OP_CREATED:
+		command = SB_ADD;
+	case SR_OP_DELETED:
+		command = SB_REMOVE;
+	default:
+		command = SB_SET;
+	}
+
+	rc = format_xpath(ctx, action);
+	CHECK_RET(rc, error, "failed to format xpath: %s", sr_strerror(rc));
+	INF("new xpath %s\n\n", action->snabb_xpath);
 
 	//TODO make dynamic
 	char message[SNABB_MESSAGE_MAX];
-	snprintf(message, SNABB_MESSAGE_MAX, "set-config {path '/%s'; config '%s'; schema %s;}", xpath_substring, action->value, ctx->yang_model);
+	snprintf(message, SNABB_MESSAGE_MAX, "set-config {path '/%s'; config '%s'; schema %s;}", action->snabb_xpath, action->value, ctx->yang_model);
 
 	/* send to socket */
 	INF_MSG("send to socket");
 	socket_send(ctx, message, command);
 
+error:
 	return rc;
 }
 
@@ -317,6 +365,9 @@ free_action(action_t *action) {
 	if (NULL != action->value) {
 		free(action->value);
 	}
+	if (NULL != action->snabb_xpath) {
+		free(action->snabb_xpath);
+	}
 	free(action);
 }
 
@@ -346,18 +397,11 @@ error:
 
 int
 apply_action(ctx_t *ctx, action_t *action) {
-	sb_command_t command;
 	int rc = SR_ERR_OK;
 
-	/* translate sysrepo operation to snabb command */
-	switch(action->op) {
-	case SR_OP_MODIFIED:
-		command = SB_SET;
-	default:
-		command = SB_SET;
-	}
+	rc = sysrepo_to_snabb(ctx, action);
 
-	rc = sysrepo_to_snabb(ctx, command, action);
+	//TODO create revrse list for rollback
 
 	return rc;
 }

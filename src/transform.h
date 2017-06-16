@@ -53,6 +53,7 @@ typedef struct ctx_s {
 
 typedef struct action_s {
 	char *xpath;
+	char *snabb_xpath;
 	char *value;
 	sr_type_t type;
 	sr_change_oper_t op;
@@ -64,8 +65,9 @@ int socket_connect(ctx_t *ctx);
 int socket_send(ctx_t *ctx, char *message, sb_command_t command);
 void socket_close(ctx_t *ctx);
 
+int format_xpath(ctx_t *ctx, action_t *action);
 int xpath_to_snabb(char **message, char *xpath, sr_session_ctx_t *sess);
-int sysrepo_to_snabb(ctx_t *ctx, sb_command_t command, action_t *action);
+int sysrepo_to_snabb(ctx_t *ctx, action_t *action);
 
 int add_action(sr_val_t *val, sr_change_oper_t op);
 void clear_all_actions();
