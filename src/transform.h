@@ -66,7 +66,7 @@ int socket_send(ctx_t *ctx, char *message, sb_command_t command);
 void socket_close(ctx_t *ctx);
 
 int format_xpath(ctx_t *ctx, action_t *action);
-int xpath_to_snabb(char **message, char *xpath, sr_session_ctx_t *sess);
+int xpath_to_snabb(ctx_t *ctx, action_t *action, char **message);
 int sysrepo_to_snabb(ctx_t *ctx, action_t *action);
 
 int add_action(sr_val_t *val, sr_change_oper_t op);

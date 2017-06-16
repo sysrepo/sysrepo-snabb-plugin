@@ -195,7 +195,7 @@ cleanup:
 }
 
 int
-xpath_to_snabb(char **message, char *xpath, sr_session_ctx_t *sess) {
+xpath_to_snabb(ctx_t *ctx, action_t *action, char **message) {
 	int rc = SR_ERR_OK;
 	int len = SNABB_MESSAGE_MAX;
 	*message = malloc(sizeof(*message) * len);
@@ -206,7 +206,7 @@ xpath_to_snabb(char **message, char *xpath, sr_session_ctx_t *sess) {
 
 	sr_node_t *trees = NULL;
 	long unsigned int tree_cnt = 0;
-	rc = sr_get_subtrees(sess, xpath, SR_GET_SUBTREE_DEFAULT, &trees, &tree_cnt);
+	rc = sr_get_subtrees(ctx->sess, action->xpath, SR_GET_SUBTREE_DEFAULT, &trees, &tree_cnt);
 	CHECK_RET(rc, error, "failed sr_get_subtrees: %s", sr_strerror(rc));
 
 	if (1 == tree_cnt) {
@@ -276,6 +276,9 @@ sysrepo_to_snabb(ctx_t *ctx, action_t *action) {
 	char *message = NULL;
 	int  rc = SR_ERR_OK;
 
+	char *tmp = NULL;
+	char **value = &tmp;
+
 	rc = format_xpath(ctx, action);
 	CHECK_RET(rc, error, "failed to format xpath: %s", sr_strerror(rc));
 	INF("new xpath %s\n\n", action->snabb_xpath);
@@ -291,7 +294,14 @@ sysrepo_to_snabb(ctx_t *ctx, action_t *action) {
 		command = SB_SET;
 		break;
 	case SR_OP_CREATED:
-		//TODO implement this
+		rc = xpath_to_snabb(ctx, action, value);
+		CHECK_RET(rc, error, "failed xpath_to_snabb: %s", sr_strerror(rc));
+
+		message = malloc(sizeof(message) + SNABB_MESSAGE_MAX + strlen(action->snabb_xpath) + strlen(ctx->yang_model));
+		if (NULL == action->snabb_xpath) {
+			return SR_ERR_NOMEM;
+		}
+		snprintf(message, SNABB_MESSAGE_MAX, "remove-config {path '/%s'; schema %s;}", action->snabb_xpath, ctx->yang_model);
 		command = SB_ADD;
 		break;
 	case SR_OP_DELETED:
