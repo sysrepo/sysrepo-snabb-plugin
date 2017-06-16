@@ -87,7 +87,6 @@ error:
 }
 
 int socket_send(ctx_t *ctx, char *message, sb_command_t command) {
-	char *buffer = NULL;
 	int len = 0;
 	int nbytes;
 
@@ -101,7 +100,7 @@ int socket_send(ctx_t *ctx, char *message, sb_command_t command) {
 
 	len = (int) strlen(&str[0]) + 1 + (int) strlen(message) + 1;
 
-	buffer = malloc(sizeof(*message) * len);
+	char *buffer = malloc(sizeof(buffer) * len);
 	if (NULL == buffer) {
 		return SR_ERR_NOMEM;
 	}
@@ -306,11 +305,13 @@ sysrepo_to_snabb(ctx_t *ctx, action_t *action) {
 		rc = xpath_to_snabb(ctx, action, value);
 		CHECK_RET(rc, error, "failed xpath_to_snabb: %s", sr_strerror(rc));
 
-		message = malloc(sizeof(message) + SNABB_MESSAGE_MAX + strlen(action->snabb_xpath) + strlen(ctx->yang_model));
+		int len = SNABB_MESSAGE_MAX + (int) strlen(action->snabb_xpath) + (int) strlen(ctx->yang_model);
+		message = malloc(sizeof(message) * len);
 		if (NULL == action->snabb_xpath) {
 			return SR_ERR_NOMEM;
 		}
-		snprintf(message, SNABB_MESSAGE_MAX, "remove-config {path '/%s'; schema %s;}", action->snabb_xpath, ctx->yang_model);
+		snprintf(message, len, "set-config {path '/%s'; config '%s'; schema %s;}", action->snabb_xpath, *value, ctx->yang_model);
+		free(*value);
 		command = SB_ADD;
 		break;
 	case SR_OP_DELETED:
