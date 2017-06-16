@@ -41,32 +41,6 @@ bool leaf_without_value(sr_type_t type) {
 	return type == SR_UNKNOWN_T || type == SR_LEAF_EMPTY_T;
 }
 
-char *concat(const char *s1, const char *s2) {
-	char *result = NULL;
-
-	result = malloc(strlen(s1)+strlen(s2)+1);
-
-	strcpy(result, s1);
-	strcat(result, s2);
-
-	return result;
-}
-
-char *format_message(char *message) {
-	char *tmp, *formated = NULL;
-	char snum[7];
-
-	int len = strlen(message);
-	//TODO error handling
-	snprintf(snum, 7, "%d", len);
-
-	tmp = concat(&snum[0], "\n");
-	formated = concat(tmp, message);
-	free(tmp);
-
-	return formated;
-}
-
 void socket_close(ctx_t *ctx) {
 	if (-1 != ctx->socket_fd) {
 		close(ctx->socket_fd);
@@ -103,19 +77,34 @@ error:
 }
 
 int socket_send(ctx_t *ctx, char *message, sb_command_t command) {
-	char buffer[SNABB_MESSAGE_MAX];
-	int  nbytes;
+	char *buffer = NULL;
+	int len = 0;
+	int nbytes;
 
-	char *formated = format_message(message);
-	nbytes = snprintf(buffer, SNABB_MESSAGE_MAX, "%s", formated);
-
-	nbytes = write(ctx->socket_fd, buffer, nbytes);
-	if ((int) strlen(formated) != (int) nbytes) {
-		ERR("Failed to write full messaget o server: written %d, expected %d", (int) nbytes, (int) strlen(formated));
-		free(formated);
+	if (NULL == message) {
 		return SR_ERR_INTERNAL;
 	}
-	free(formated);
+
+	/* get message length in char* format */
+	char str[30];
+	sprintf(str, "%d", (int) strlen(message));
+
+	len = (int) strlen(&str[0]) + 1 + (int) strlen(message) + 1;
+
+	buffer = malloc(sizeof(*message) * len);
+	if (NULL == buffer) {
+		return SR_ERR_NOMEM;
+	}
+
+	nbytes = snprintf(buffer, len, "%s\n%s", str, message);
+
+	nbytes = write(ctx->socket_fd, buffer, nbytes);
+	if ((int) strlen(buffer) != (int) nbytes) {
+		ERR("Failed to write full messaget o server: written %d, expected %d", (int) nbytes, (int) strlen(buffer));
+		free(buffer);
+		return SR_ERR_INTERNAL;
+	}
+	free(buffer);
 
 	nbytes = read(ctx->socket_fd, ch, SNABB_SOCKET_MAX);
 	ch[nbytes] = 0;
@@ -210,6 +199,9 @@ xpath_to_snabb(char **message, char *xpath, sr_session_ctx_t *sess) {
 	int rc = SR_ERR_OK;
 	int len = SNABB_MESSAGE_MAX;
 	*message = malloc(sizeof(*message) * len);
+	if (NULL == *message) {
+		return SR_ERR_NOMEM;
+	}
 	*message[0] = '\0';
 
 	sr_node_t *trees = NULL;
