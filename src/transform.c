@@ -250,17 +250,14 @@ format_xpath(ctx_t *ctx, action_t *action) {
 	int  rc = SR_ERR_OK;
 	int i,j = 0; /* iterators in for loop */
 
-	/* snabb xpath is smaller then sysrepo xpath */
-	action->snabb_xpath = malloc(sizeof(action->snabb_xpath) * (int) strlen(action->xpath));
-	if (NULL == action->snabb_xpath) {
-		return SR_ERR_NOMEM;
-	}
-
 	/* transform sysrepo xpath to snabb xpath
 	 * skip the first N characters '/<yang_model>:'
 	 * N = '/' + ':' + 'length of yang model'
 	 */
-	action->snabb_xpath = action->xpath + ((2 + strlen(ctx->yang_model)) * sizeof *action->snabb_xpath);
+	action->snabb_xpath = strdup(action->xpath + ((2 + strlen(ctx->yang_model)) * sizeof *action->snabb_xpath));
+	if (NULL == action->snabb_xpath) {
+		return SR_ERR_NOMEM;
+	}
 
 	/* remove "'" from the key values in the xpath
 	 * transform psid-map[addr='178.79.150.1'] to psid-map[addr=178.79.150.1]
