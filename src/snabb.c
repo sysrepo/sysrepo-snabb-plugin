@@ -149,6 +149,7 @@ error:
 
 static int
 module_change_cb(sr_session_ctx_t *session, const char *module_name, sr_notif_event_t event, void *private_ctx) {
+	int rc = SR_ERR_OK;
 	ctx_t *ctx = private_ctx;
 	INF("%s configuration has changed.", ctx->yang_model);
 
@@ -159,8 +160,11 @@ module_change_cb(sr_session_ctx_t *session, const char *module_name, sr_notif_ev
 		return SR_ERR_OK;
 	}
 
-	parse_config(session, module_name, ctx);
-	return SR_ERR_OK;
+	rc = parse_config(session, module_name, ctx);
+	CHECK_RET(rc, error, "failed to apply sysrepo changes to snabb: %s", sr_strerror(rc));
+
+error:
+	return rc;
 }
 
 int
