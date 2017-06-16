@@ -107,6 +107,7 @@ int socket_send(ctx_t *ctx, char *message, sb_command_t command) {
 
 	nbytes = snprintf(buffer, len, "%s\n%s", str, message);
 
+	//TODO add timeout check
 	nbytes = write(ctx->socket_fd, buffer, nbytes);
 	if ((int) strlen(buffer) != (int) nbytes) {
 		ERR("Failed to write full messaget o server: written %d, expected %d", (int) nbytes, (int) strlen(buffer));
@@ -137,7 +138,7 @@ int socket_send(ctx_t *ctx, char *message, sb_command_t command) {
 		goto failed;
 	} else {
 		INF("Operation:\n%s", message);
-		INF("Respons:\n%s", ch);
+		INF("Response:\n%s", ch);
 	}
 
 	/* set null terminated string at the beggining */
@@ -305,7 +306,7 @@ sysrepo_to_snabb(ctx_t *ctx, action_t *action) {
 		rc = xpath_to_snabb(ctx, action, value);
 		CHECK_RET(rc, error, "failed xpath_to_snabb: %s", sr_strerror(rc));
 
-		int len = SNABB_MESSAGE_MAX + (int) strlen(action->snabb_xpath) + (int) strlen(ctx->yang_model);
+		int len = SNABB_MESSAGE_MAX + (int) strlen(action->snabb_xpath) + strlen(*value) + (int) strlen(ctx->yang_model);
 		message = malloc(sizeof(message) * len);
 		if (NULL == action->snabb_xpath) {
 			return SR_ERR_NOMEM;
