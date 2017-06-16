@@ -238,8 +238,8 @@ xpath_to_snabb(ctx_t *ctx, action_t *action, char **message) {
 	sr_free_trees(trees, tree_cnt);
 	return rc;
 error:
-	if (NULL != message) {
-		free(message);
+	if (NULL != *message) {
+		free(*message);
 	}
 	if (NULL != trees) {
 		sr_free_trees(trees, tree_cnt);
