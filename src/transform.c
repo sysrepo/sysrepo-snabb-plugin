@@ -176,7 +176,7 @@ int fill_list(sr_node_t *tree, char **message, int *len) {
 		return rc;
 	}
 	while(true) {
-		if (*len < XPATH_MAX_LEN + strlen(*message)) {
+		if (*len < XPATH_MAX_LEN + (int) strlen(*message)) {
 			rc = double_message_size(message, len);
 			CHECK_RET(rc, cleanup, "failed to double the buffer size: %s", sr_strerror(rc));
 		}
@@ -227,7 +227,7 @@ xpath_to_snabb(char **message, char *xpath, sr_session_ctx_t *sess) {
 			strcat(*message, " } ");
 		}
 	} else {
-		for (int i = 0; i < tree_cnt; i++) {
+		for (int i = 0; i < (int) tree_cnt; i++) {
 			rc = fill_list(&trees[i], message, &len);
 			CHECK_RET(rc, error, "failed to create snabb configuration data: %s", sr_strerror(rc));
 		}
@@ -265,7 +265,7 @@ format_xpath(ctx_t *ctx, action_t *action) {
 	/* remove "'" from the key values in the xpath
 	 * transform psid-map[addr='178.79.150.1'] to psid-map[addr=178.79.150.1]
 	 */
-	for(i = 0; i < strlen(action->snabb_xpath); i++) {
+	for(i = 0; i < (int) strlen(action->snabb_xpath); i++) {
 		if (action->snabb_xpath[i] == '\'' && action->snabb_xpath[i+1] == ']') {
 			i = i + 1;
 		}
@@ -352,6 +352,7 @@ add_action(sr_val_t *val, sr_change_oper_t op) {
 		action->value = NULL;
 	}
 	action->xpath = strdup(val->xpath);
+	action->snabb_xpath = NULL;
 	action->op = op;
 	action->type = val->type;
 	LIST_INSERT_HEAD(&head, action, actions);
