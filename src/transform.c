@@ -445,3 +445,15 @@ error:
 	}
 	return rc;
 }
+
+void
+clear_context(ctx_t *ctx) {
+	sr_unsubscribe(ctx->running_sess, ctx->sub);
+
+	socket_close(ctx);
+
+	ly_ctx_destroy(ctx->libyang_ctx, NULL);
+
+	INF("%s plugin cleanup finished.", ctx->yang_model);
+	free(ctx);
+}

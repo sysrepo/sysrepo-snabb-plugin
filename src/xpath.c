@@ -50,6 +50,7 @@ int
 format_xpath(ctx_t *ctx, action_t *action) {
 	struct ly_set *schema_node = NULL;
 	char *xpath = NULL, *node = NULL, *tmp = NULL;
+	struct lys_node *lys = NULL;
     sr_xpath_ctx_t state = {0};
 	int rc = SR_ERR_OK;
 
@@ -119,7 +120,7 @@ format_xpath(ctx_t *ctx, action_t *action) {
 		goto error;
 	}
 
-	struct lys_node *lys = schema_node->set.s[0];
+	lys = schema_node->set.s[0];
 
 	if (LYS_LEAFLIST == lys->nodetype) {
 		node = sr_xpath_last_node(NULL, &state);
@@ -134,6 +135,9 @@ format_xpath(ctx_t *ctx, action_t *action) {
 	}
 
 error:
+	if (NULL != schema_node) {
+		ly_set_free(schema_node);
+	}
 	if (NULL != tmp) {
 		free(tmp);
 	}

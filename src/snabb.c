@@ -225,11 +225,8 @@ sr_plugin_cleanup_cb(sr_session_ctx_t *session, void *private_ctx) {
 	}
 	/* subscription was set as our private context */
 	ctx_t *ctx = private_ctx;
-	sr_unsubscribe(session, ctx->sub);
 
-	INF("%s plugin cleanup finished.", ctx->yang_model);
-	socket_close(ctx);
-	free(ctx);
+	clear_context(ctx);
 }
 
 #ifndef PLUGIN

@@ -63,6 +63,8 @@ typedef struct action_s {
 } action_t;
 LIST_HEAD(listhead, action_s) head;
 
+
+void clear_context(ctx_t *ctx);
 int socket_connect(ctx_t *ctx);
 void socket_close(ctx_t *ctx);
 
