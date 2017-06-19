@@ -198,34 +198,9 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
 	rc = socket_connect(ctx);
 	CHECK_RET(rc, error, "failed socket_connect: %s", sr_strerror(rc));
 
-	//char *message = "get-config {path '/'; schema snabb-softwire-v1;}";
-	//rc = socket_send(ctx, message, SB_GET);
-	//CHECK_RET(rc, error, "failed socket_send for message %s", message);
-	//message = "set-config {path '/softwire-config/internal-interface/allow-incoming-icmp'; config 'true'; schema snabb-softwire-v1;}";
-	//rc = socket_send(ctx, message, SB_SET);
-	//CHECK_RET(rc, error, "failed socket_send for message %s", message);
-
-	//sysrepo_to_snabb(ctx, SR_OP_MODIFIED, "/snabb-softwire-v1:softwire-config/external-interface/error-rate-limiting/packets", "600020");
-
 	/* initialize action list */
 	LIST_HEAD(listhead, action_s) head;
 	LIST_INIT(&head);
-
-	/* test */
-	//char *tmp = NULL;
-	//char **message = &tmp;
-	//rc = xpath_to_snabb(message, "/snabb-softwire-v1:softwire-config/binding-table/softwire[ipv4='178.79.150.15'][psid='1'][padding='0']", session);
-	//CHECK_RET(rc, error, "failed xpath_to_snabb: %s", sr_strerror(rc));
-	//INF("MESSAGE:\n%s", *message);
-	//free(*message);
-
-	//tmp = NULL;
-	//message = &tmp;
-	////TODO discard state data
-	//rc = xpath_to_snabb(&tmp, "/snabb-softwire-v1:*", session);
-	//CHECK_RET(rc, error, "failed xpath_to_snabb: %s", sr_strerror(rc));
-	//INF("MESSAGE:\n%s", tmp);
-	//free(*message);
 
 	rc = sysrepo_datastore_to_snabb(ctx);
 	CHECK_RET(rc, error, "failed to apply sysrepo startup data to snabb: %s", sr_strerror(rc));
