@@ -27,6 +27,7 @@
 #include <sysrepo/plugins.h>
 
 #include "snabb.h"
+#include "parse.h"
 #include "common.h"
 #include "transform.h"
 
@@ -170,6 +171,7 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
 
 	ctx = malloc(sizeof *ctx);
 	ctx->yang_model = YANG_MODEL;
+	ctx->libyang_ctx = NULL;
 	ctx->sub = subscription;
 	ctx->socket_fd = -1;
 
@@ -195,6 +197,9 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
 	/* initialize action list */
 	LIST_HEAD(listhead, action_s) head;
 	LIST_INIT(&head);
+
+	rc = parse_yang_model(ctx, session);
+	CHECK_RET(rc, error, "failed to parse yang model with libyang: %s", sr_strerror(rc));
 
 	rc = sysrepo_datastore_to_snabb(ctx);
 	CHECK_RET(rc, error, "failed to apply sysrepo startup data to snabb: %s", sr_strerror(rc));

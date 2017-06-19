@@ -19,13 +19,11 @@
  * limitations under the License.
  */
 
-#ifndef XPATH_H
-#define XPATH_H
+#ifndef PARSE_H
+#define PARSE_H
 
 #include "transform.h"
 
-bool leaf_without_value(sr_type_t type);
-bool list_or_container(sr_type_t type);
-int format_xpath(ctx_t *ctx, action_t *action);
+int parse_yang_model(ctx_t *ctx, sr_session_ctx_t *session);
 
-#endif /* XPATH_H */
+#endif /* PARSE_H */

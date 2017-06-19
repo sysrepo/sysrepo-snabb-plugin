@@ -25,6 +25,7 @@
 
 #include <sysrepo.h>
 #include <sysrepo/xpath.h>
+#include <libyang/tree_data.h>
 
 #include "common.h"
 #include "transform.h"
@@ -46,7 +47,8 @@ leaf_without_value(sr_type_t type) {
  * 3) remove key's from the last node for set/add operation
  */
 int
-format_xpath(action_t *action) {
+format_xpath(ctx_t *ctx, action_t *action) {
+	struct ly_set *schema_node = NULL;
 	char *xpath = NULL, *node = NULL, *tmp = NULL;
     sr_xpath_ctx_t state = {0};
 	int rc = SR_ERR_OK;
@@ -104,7 +106,32 @@ format_xpath(action_t *action) {
 			}
 		}
 	}
-	action->snabb_xpath = strdup(xpath);
+
+	/* check if leaf-list */
+	schema_node = lys_find_xpath(ctx->libyang_ctx, NULL, action->xpath, 0);
+	if (NULL == schema_node) {
+		rc = SR_ERR_INTERNAL;
+		goto error;
+	}
+
+	if (schema_node->number > 1) {
+		rc = SR_ERR_INTERNAL;
+		goto error;
+	}
+
+	struct lys_node *lys = schema_node->set.s[0];
+
+	if (LYS_LEAFLIST == lys->nodetype) {
+		node = sr_xpath_last_node(NULL, &state);
+		if (NULL == node) {
+			rc = SR_ERR_INTERNAL;
+			goto error;
+		}
+		/* remove last node from xpath */
+		action->snabb_xpath = strndup(xpath, strlen(xpath) - 1 - strlen(node));
+	} else {
+		action->snabb_xpath = strdup(xpath);
+	}
 
 error:
 	if (NULL != tmp) {

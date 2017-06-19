@@ -12,6 +12,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/CMakeModules/")
 set(SOURCES
 	src/snabb.c
 	src/xpath.c
+	src/parse.c
 	src/transform.c)
 
 if (PLUGIN)
@@ -21,6 +22,11 @@ else()
 endif()
 
 set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES PREFIX "")
+
+# dependencies - libyang
+find_package(LibYANG REQUIRED)
+target_link_libraries(${CMAKE_PROJECT_NAME} ${LIBYANG_LIBRARIES})
+include_directories(${LIBYANG_INCLUDE_DIRS})
 
 find_package(SYSREPO REQUIRED)
 target_link_libraries(${CMAKE_PROJECT_NAME} ${SYSREPO_LIBRARIES})

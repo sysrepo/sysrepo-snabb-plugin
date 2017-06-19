@@ -24,7 +24,7 @@
 
 #include <sysrepo.h>
 #include <sys/queue.h>
-
+#include <libyang/libyang.h>
 
 #define XPATH_MAX_LEN     128
 #define UNIX_PATH_MAX     256
@@ -44,6 +44,7 @@ typedef enum sb_command_e {
 
 typedef struct ctx_s {
 	const char *yang_model;
+    struct ly_ctx *libyang_ctx;
 	int pid;
 	int socket_fd;
 	char socket_path[UNIX_PATH_MAX];

@@ -247,7 +247,7 @@ sysrepo_to_snabb(ctx_t *ctx, action_t *action) {
 	char *tmp = NULL;
 	char **value = &tmp;
 
-	rc = format_xpath(action);
+	rc = format_xpath(ctx, action);
 	CHECK_RET(rc, error, "failed to format xpath: %s", sr_strerror(rc));
 
 	/* translate sysrepo operation to snabb command */
