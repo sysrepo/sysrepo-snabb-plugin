@@ -41,18 +41,26 @@ apply_change(sr_change_oper_t op, sr_val_t *old_val, sr_val_t *new_val) {
 	switch(op) {
 	case SR_OP_CREATED:
 		if (NULL != new_val) {
+			printf("CREATED: ");
+			sr_print_val(new_val);
 			rc = add_action(new_val, op);
 			CHECK_RET(rc, error, "failed to add operation: %s", sr_strerror(rc));
 		}
 		break;
 	case SR_OP_DELETED:
 		if (NULL != old_val) {
+			printf("DELETED: ");
+			sr_print_val(old_val);
 			rc = add_action(old_val, op);
 			CHECK_RET(rc, error, "failed to add operation: %s", sr_strerror(rc));
 		}
 	break;
 	case SR_OP_MODIFIED:
 		if (NULL != old_val && NULL != new_val) {
+			printf("MODIFIED: ");
+			printf("old value ");
+			sr_print_val(old_val);
+			printf("new value ");
 			rc = add_action(new_val, op);
 			CHECK_RET(rc, error, "failed to add operation: %s", sr_strerror(rc));
 		}
@@ -69,19 +77,6 @@ apply_change(sr_change_oper_t op, sr_val_t *old_val, sr_val_t *new_val) {
 error:
 	//TODO free list
 	return rc;
-}
-
-const char *
-ev_to_str(sr_notif_event_t ev) {
-	switch (ev) {
-	case SR_EV_VERIFY:
-		return "verify";
-	case SR_EV_APPLY:
-		return "apply";
-		case SR_EV_ABORT:
-	default:
-	return "abort";
-	}
 }
 
 static int
@@ -155,7 +150,6 @@ module_change_cb(sr_session_ctx_t *session, const char *module_name, sr_notif_ev
 
 	ctx->sess = session;
 
-	printf("\n\n ========== Notification  %s =============================================\n", ev_to_str(event));
 	if (SR_EV_APPLY == event) {
 		return SR_ERR_OK;
 	}
