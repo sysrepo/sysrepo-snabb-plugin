@@ -454,6 +454,39 @@ clear_context(ctx_t *ctx) {
 
 	ly_ctx_destroy(ctx->libyang_ctx, NULL);
 
+	/* startup datastore */
+	sr_session_stop(ctx->startup_sess);
+	sr_disconnect(ctx->startup_conn);
+
 	INF("%s plugin cleanup finished.", ctx->yang_model);
 	free(ctx);
+}
+
+int
+load_startup_datastore(ctx_t *ctx) {
+	sr_conn_ctx_t *connection = NULL;
+	sr_session_ctx_t *session = NULL;
+	int rc = SR_ERR_OK;
+
+	/* connect to sysrepo */
+	rc = sr_connect(ctx->yang_model, SR_CONN_DEFAULT, &connection);
+	CHECK_RET(rc, cleanup, "Error by sr_connect: %s", sr_strerror(rc));
+
+	/* start session */
+	rc = sr_session_start(connection, SR_DS_STARTUP, SR_SESS_DEFAULT, &session);
+	CHECK_RET(rc, cleanup, "Error by sr_session_start: %s", sr_strerror(rc));
+
+	ctx->startup_conn = connection;
+	ctx->startup_sess = session;
+
+	return rc;
+cleanup:
+	if (NULL != session) {
+		sr_session_stop(session);
+	}
+	if (NULL != connection) {
+		sr_disconnect(connection);
+	}
+
+	return rc;
 }

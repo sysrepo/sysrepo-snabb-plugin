@@ -51,6 +51,8 @@ typedef struct ctx_s {
 	sr_subscription_ctx_t *sub;
 	sr_session_ctx_t *sess;
 	sr_session_ctx_t *running_sess;
+	sr_conn_ctx_t *startup_conn;
+	sr_session_ctx_t *startup_sess;
 } ctx_t;
 
 typedef struct action_s {
@@ -63,6 +65,7 @@ typedef struct action_s {
 } action_t;
 LIST_HEAD(listhead, action_s) head;
 
+int load_startup_datastore(ctx_t *ctx);
 
 void clear_context(ctx_t *ctx);
 int socket_connect(ctx_t *ctx);

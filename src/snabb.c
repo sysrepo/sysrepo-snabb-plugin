@@ -152,6 +152,16 @@ module_change_cb(sr_session_ctx_t *session, const char *module_name, sr_notif_ev
 	ctx->sess = session;
 
 	if (SR_EV_APPLY == event) {
+		/* copy running datastore to startup */
+
+		rc = sr_copy_config(ctx->startup_sess, module_name, SR_DS_RUNNING, SR_DS_STARTUP);
+		if (SR_ERR_OK != rc) {
+			WRN_MSG("Failed to copy running datastore to startup");
+			/* TODO handle this error in snabb
+			 * there should be no errors at this stage of the process
+			 * */
+			return rc;
+		}
 		return SR_ERR_OK;
 	}
 
@@ -204,6 +214,9 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
 
 	rc = sysrepo_datastore_to_snabb(ctx);
 	CHECK_RET(rc, error, "failed to apply sysrepo startup data to snabb: %s", sr_strerror(rc));
+
+	rc = load_startup_datastore(ctx);
+	CHECK_RET(rc, error, "failed to load startup datastore: %s", sr_strerror(rc));
 
 	return SR_ERR_OK;
 
