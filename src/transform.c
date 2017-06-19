@@ -387,9 +387,11 @@ add_action(sr_val_t *val, sr_change_oper_t op) {
 
 void
 free_action(action_t *action) {
-	free(action->xpath);
 	if (NULL != action->value) {
 		free(action->value);
+	}
+	if (NULL != action->xpath) {
+		free(action->xpath);
 	}
 	if (NULL != action->snabb_xpath) {
 		free(action->snabb_xpath);
