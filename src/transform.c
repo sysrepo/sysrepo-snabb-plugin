@@ -31,10 +31,10 @@
 #include <sysrepo/plugins.h>
 
 #include "common.h"
+#include "xpath.h"
 #include "transform.h"
 
 int socket_send(ctx_t *ctx, char *message, sb_command_t command);
-int format_xpath(ctx_t *ctx, action_t *action);
 int xpath_to_snabb(ctx_t *ctx, action_t *action, char **message);
 int sysrepo_to_snabb(ctx_t *ctx, action_t *action);
 int add_action(sr_val_t *val, sr_change_oper_t op);
@@ -248,7 +248,7 @@ error:
 }
 
 int
-format_xpath(ctx_t *ctx, action_t *action) {
+format_xpath_old(ctx_t *ctx, action_t *action) {
 	int  rc = SR_ERR_OK;
 	int i,j = 0; /* iterators in for loop */
 
@@ -289,7 +289,7 @@ sysrepo_to_snabb(ctx_t *ctx, action_t *action) {
 	char *tmp = NULL;
 	char **value = &tmp;
 
-	rc = format_xpath(ctx, action);
+	rc = format_xpath(action);
 	CHECK_RET(rc, error, "failed to format xpath: %s", sr_strerror(rc));
 
 	/* translate sysrepo operation to snabb command */
@@ -299,7 +299,7 @@ sysrepo_to_snabb(ctx_t *ctx, action_t *action) {
 		if (NULL == action->snabb_xpath) {
 			return SR_ERR_NOMEM;
 		}
-		snprintf(message, SNABB_MESSAGE_MAX, "set-config {path '/%s'; config '%s'; schema %s;}", action->snabb_xpath, action->value, ctx->yang_model);
+		snprintf(message, SNABB_MESSAGE_MAX, "set-config {path '%s'; config '%s'; schema %s;}", action->snabb_xpath, action->value, ctx->yang_model);
 		command = SB_SET;
 		break;
 	case SR_OP_CREATED:
@@ -311,7 +311,7 @@ sysrepo_to_snabb(ctx_t *ctx, action_t *action) {
 		if (NULL == action->snabb_xpath) {
 			return SR_ERR_NOMEM;
 		}
-		snprintf(message, len, "set-config {path '/%s'; config '%s'; schema %s;}", action->snabb_xpath, *value, ctx->yang_model);
+		snprintf(message, len, "set-config {path '%s'; config '%s'; schema %s;}", action->snabb_xpath, *value, ctx->yang_model);
 		free(*value);
 		command = SB_ADD;
 		break;
@@ -320,7 +320,7 @@ sysrepo_to_snabb(ctx_t *ctx, action_t *action) {
 		if (NULL == action->snabb_xpath) {
 			return SR_ERR_NOMEM;
 		}
-		snprintf(message, SNABB_MESSAGE_MAX, "remove-config {path '/%s'; schema %s;}", action->snabb_xpath, ctx->yang_model);
+		snprintf(message, SNABB_MESSAGE_MAX, "remove-config {path '%s'; schema %s;}", action->snabb_xpath, ctx->yang_model);
 		command = SB_REMOVE;
 		break;
 	default:
