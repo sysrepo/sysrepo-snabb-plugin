@@ -33,7 +33,7 @@
 #include "parse.h"
 
 int
-parse_yang_model(ctx_t *ctx, sr_session_ctx_t *session) {
+parse_yang_model(ctx_t *ctx) {
 	const struct lys_module *module = NULL;
     struct ly_ctx *libyang_ctx = NULL;
 	char *schema_content = NULL;
@@ -48,10 +48,9 @@ parse_yang_model(ctx_t *ctx, sr_session_ctx_t *session) {
 		goto error;
 	}
 
-	rc = sr_get_schema(session, ctx->yang_model, NULL, NULL, SR_SCHEMA_YIN, &schema_content);
+	rc = sr_get_schema(ctx->running_sess, ctx->yang_model, NULL, NULL, SR_SCHEMA_YIN, &schema_content);
 	CHECK_RET(rc, error, "failed sr_get_schema: %s", sr_strerror(rc));
 
-	INF("content: %s", schema_content);
 	module = lys_parse_mem(libyang_ctx, schema_content, LYS_IN_YIN);
 	if (NULL == module) {
 		rc = SR_ERR_INTERNAL;

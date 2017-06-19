@@ -24,6 +24,6 @@
 
 #include "transform.h"
 
-int parse_yang_model(ctx_t *ctx, sr_session_ctx_t *session);
+int parse_yang_model(ctx_t *ctx);
 
 #endif /* PARSE_H */

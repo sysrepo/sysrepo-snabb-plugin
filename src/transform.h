@@ -50,6 +50,7 @@ typedef struct ctx_s {
 	char socket_path[UNIX_PATH_MAX];
 	sr_subscription_ctx_t *sub;
 	sr_session_ctx_t *sess;
+	sr_session_ctx_t *running_sess;
 } ctx_t;
 
 typedef struct action_s {
