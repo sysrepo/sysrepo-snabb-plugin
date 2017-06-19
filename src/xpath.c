@@ -38,14 +38,8 @@
 int
 format_xpath(action_t *action) {
 	char *xpath = NULL, *node = NULL, *tmp = NULL;
-	sr_xpath_ctx_t *xpath_ctx;
+    sr_xpath_ctx_t state = {0};
 	int rc = SR_ERR_OK;
-
-	xpath_ctx = malloc(sizeof(xpath_ctx));
-	if (NULL == xpath_ctx) {
-		rc = SR_ERR_NOMEM;
-		goto error;
-	}		
 
 	/* snabb xpath is always smaller than sysrepo's xpath */
 	xpath = malloc(sizeof(xpath) * strlen(action->xpath));
@@ -53,6 +47,7 @@ format_xpath(action_t *action) {
 		rc = SR_ERR_NOMEM;
 		goto error;
 	}		
+	strcpy(xpath, "");
 
 	tmp = malloc(sizeof(tmp) * strlen(action->xpath));
 	if (NULL == tmp) {
@@ -60,7 +55,7 @@ format_xpath(action_t *action) {
 		goto error;
 	}		
 
-	node = sr_xpath_next_node(action->xpath, xpath_ctx);
+	node = sr_xpath_next_node(action->xpath, &state);
 	if (NULL == node) {
 		rc = SR_ERR_INTERNAL;
 		goto error;
@@ -74,8 +69,8 @@ format_xpath(action_t *action) {
 
 		while(true) {
 			char *key, *value;
-			key = sr_xpath_next_key_name(NULL, xpath_ctx);
-			value = sr_xpath_next_key_value(NULL, xpath_ctx);
+			key = sr_xpath_next_key_name(NULL, &state);
+			value = sr_xpath_next_key_value(NULL, &state);
 			if (NULL == key) {
 				break;
 			}
@@ -85,7 +80,7 @@ format_xpath(action_t *action) {
 			strcat(tmp,value);
 			strcat(tmp,"]");
 		}
-		node = sr_xpath_next_node(NULL, xpath_ctx);
+		node = sr_xpath_next_node(NULL, &state);
 		if (NULL == node) {
 			break;
 		}
@@ -99,9 +94,6 @@ error:
 	}
 	if (NULL == xpath) {
 		free(xpath);
-	}
-	if (NULL == xpath_ctx) {
-		free(xpath_ctx);
 	}
 	return rc;
 }
