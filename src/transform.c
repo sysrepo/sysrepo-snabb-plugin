@@ -269,7 +269,11 @@ sysrepo_to_snabb(ctx_t *ctx, action_t *action) {
 		if (NULL == message) {
 			return SR_ERR_NOMEM;
 		}
-		snprintf(message, len, "set-config {path '%s'; config '%s'; schema %s;}", action->snabb_xpath, *value, ctx->yang_model);
+		if (action->type == SR_LIST_T) {
+			snprintf(message, len, "add-config {path '%s'; config '%s'; schema %s;}", action->snabb_xpath, *value, ctx->yang_model);
+		} else {
+			snprintf(message, len, "set-config {path '%s'; config '%s'; schema %s;}", action->snabb_xpath, *value, ctx->yang_model);
+		}
 		free(*value);
 		command = SB_ADD;
 		break;
