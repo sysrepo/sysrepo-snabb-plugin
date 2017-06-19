@@ -30,6 +30,16 @@
 #include "transform.h"
 #include "xpath.h"
 
+bool
+list_or_container(sr_type_t type) {
+	return type == SR_LIST_T || type == SR_CONTAINER_T || type == SR_CONTAINER_PRESENCE_T;
+}
+
+bool
+leaf_without_value(sr_type_t type) {
+	return type == SR_UNKNOWN_T || type == SR_LEAF_EMPTY_T;
+}
+
 /* transform xpath to snabb compatible format
  * 1) remove yang model from xpath
  * 2) remove "'" from the key value
@@ -67,24 +77,32 @@ format_xpath(action_t *action) {
 			strcat(xpath, node);
 		}
 
+		strcpy(tmp,"");
 		while(true) {
 			char *key, *value;
 			key = sr_xpath_next_key_name(NULL, &state);
-			value = sr_xpath_next_key_value(NULL, &state);
 			if (NULL == key) {
 				break;
 			}
 			strcat(tmp,"[");
 			strcat(tmp,key);
 			strcat(tmp,"=");
+			value = sr_xpath_next_key_value(NULL, &state);
 			strcat(tmp,value);
 			strcat(tmp,"]");
 		}
 		node = sr_xpath_next_node(NULL, &state);
-		if (NULL == node) {
-			break;
+		if (list_or_container(action->type) && action->op == SR_OP_CREATED) {
+			if (NULL == node) {
+				break;
+			}
+			strcat(xpath, tmp);
+		} else {
+			strcat(xpath, tmp);
+			if (NULL == node) {
+				break;
+			}
 		}
-		strcat(xpath, tmp);
 	}
 	action->snabb_xpath = strdup(xpath);
 

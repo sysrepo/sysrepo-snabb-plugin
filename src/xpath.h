@@ -24,6 +24,8 @@
 
 #include "transform.h"
 
+bool leaf_without_value(sr_type_t type);
+bool list_or_container(sr_type_t type);
 int format_xpath(action_t *action);
 
 #endif /* XPATH_H */

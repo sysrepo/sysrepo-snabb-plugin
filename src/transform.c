@@ -42,15 +42,6 @@ void clear_all_actions();
 void free_action(action_t *action);
 int apply_action(ctx_t *ctx, action_t *action);
 
-
-bool list_or_container(sr_type_t type) {
-	return type == SR_LIST_T || type == SR_CONTAINER_T || type == SR_CONTAINER_PRESENCE_T;
-}
-
-bool leaf_without_value(sr_type_t type) {
-	return type == SR_UNKNOWN_T || type == SR_LEAF_EMPTY_T;
-}
-
 void socket_close(ctx_t *ctx) {
 	if (-1 != ctx->socket_fd) {
 		close(ctx->socket_fd);
