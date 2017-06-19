@@ -295,7 +295,7 @@ sysrepo_to_snabb(ctx_t *ctx, action_t *action) {
 	/* translate sysrepo operation to snabb command */
 	switch(action->op) {
 	case SR_OP_MODIFIED:
-		message = malloc(sizeof(message) + SNABB_MESSAGE_MAX + strlen(action->snabb_xpath) + strlen(ctx->yang_model));
+		message = malloc(sizeof(message) * (SNABB_MESSAGE_MAX + strlen(action->snabb_xpath) + strlen(ctx->yang_model)));
 		if (NULL == message) {
 			return SR_ERR_NOMEM;
 		}
@@ -316,7 +316,7 @@ sysrepo_to_snabb(ctx_t *ctx, action_t *action) {
 		command = SB_ADD;
 		break;
 	case SR_OP_DELETED:
-		message = malloc(sizeof(message) + SNABB_MESSAGE_MAX + strlen(action->snabb_xpath) + strlen(ctx->yang_model));
+		message = malloc(sizeof(message) * (SNABB_MESSAGE_MAX + strlen(action->snabb_xpath) + strlen(ctx->yang_model)));
 		if (NULL == message) {
 			return SR_ERR_NOMEM;
 		}
