@@ -107,10 +107,10 @@ format_xpath(action_t *action) {
 	action->snabb_xpath = strdup(xpath);
 
 error:
-	if (NULL == tmp) {
+	if (NULL != tmp) {
 		free(tmp);
 	}
-	if (NULL == xpath) {
+	if (NULL != xpath) {
 		free(xpath);
 	}
 	return rc;
