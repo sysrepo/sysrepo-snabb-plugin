@@ -51,7 +51,7 @@ format_xpath(ctx_t *ctx, action_t *action) {
 	struct ly_set *schema_node = NULL;
 	char *xpath = NULL, *node = NULL, *tmp = NULL;
 	struct lys_node *lys = NULL;
-    sr_xpath_ctx_t state = {0};
+	sr_xpath_ctx_t state = {0,0,0,0};
 	int rc = SR_ERR_OK;
 
 	/* snabb xpath is always smaller than sysrepo's xpath */
