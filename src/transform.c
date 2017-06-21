@@ -34,7 +34,7 @@
 #include "xpath.h"
 #include "transform.h"
 
-int socket_send(ctx_t *ctx, char *message, sb_command_t command);
+int socket_send(ctx_t *ctx, char *message, sb_command_t command, char **response);
 int xpath_to_snabb(ctx_t *ctx, action_t *action, char **message);
 int sysrepo_to_snabb(ctx_t *ctx, action_t *action);
 int add_action(sr_val_t *val, sr_change_oper_t op);
@@ -77,7 +77,7 @@ error:
 	return SR_ERR_INTERNAL;
 }
 
-int socket_send(ctx_t *ctx, char *message, sb_command_t command) {
+int socket_send(ctx_t *ctx, char *message, sb_command_t command, char **response) {
 	int len = 0;
 	int nbytes;
 
@@ -132,10 +132,12 @@ int socket_send(ctx_t *ctx, char *message, sb_command_t command) {
 		INF("Response:\n%s", ch);
 	}
 
+	if (SB_GET == command) {
+		*response = strdup(ch);
+	}
+
 	/* set null terminated string at the beggining */
 	ch[0] = '\0';
-
-	/* based on the leader.lua file */
 
 	return SR_ERR_OK;
 failed:
@@ -291,7 +293,7 @@ sysrepo_to_snabb(ctx_t *ctx, action_t *action) {
 
 	/* send to socket */
 	INF_MSG("send to socket");
-	rc = socket_send(ctx, message, command);
+	rc = socket_send(ctx, message, command, NULL);
 	CHECK_RET(rc, error, "failed to send message to snabb socket: %s", sr_strerror(rc));
 
 error:
@@ -462,6 +464,63 @@ error:
 		sr_disconnect(connection);
 	}
 
+	return rc;
+}
+
+int
+snabb_datastore_to_sysrepo(ctx_t *ctx) {
+	int rc = SR_ERR_OK;
+	sb_command_t command;
+	char message[SNABB_MESSAGE_MAX] = {0};
+	char *response = NULL;
+	char *xpaths = NULL, *values = NULL;
+
+	snprintf(message, SNABB_MESSAGE_MAX, "get-config {path '/'; schema %s;}", ctx->yang_model);
+	command = SB_GET;
+
+	INF("%s", message);
+	/* send to socket */
+	INF_MSG("send to socket");
+	rc = socket_send(ctx, message, command, &response);
+	CHECK_RET(rc, error, "failed to send message to snabb socket: %s", sr_strerror(rc));
+
+	rc = transform_data_to_array(ctx, response, &xpaths, &values);
+
+error:
+	if (NULL != response) {
+		free(response);
+	}
+	return rc;
+}
+
+int
+sync_datastores(ctx_t *ctx) {
+	char xpath[XPATH_MAX_LEN] = {0};
+	int rc = SR_ERR_OK;
+	sr_val_t *values = NULL;
+	size_t value_cnt = 0;
+
+	snprintf(xpath, XPATH_MAX_LEN, "/%s:*", ctx->yang_model);
+	rc = sr_get_items(ctx->startup_sess, xpath, &values, &value_cnt);
+	CHECK_RET(rc, error, "failed sr_get_items: %s", sr_strerror(rc));
+
+	//if (NULL == values) {
+	if (true) {
+		/* copy the snabb datastore to sysrepo */
+		INF_MSG("copy snabb data to sysrepo");
+		snabb_datastore_to_sysrepo(ctx);
+		CHECK_RET(rc, error, "failed to apply snabb data to sysrepo: %s", sr_strerror(rc));
+	} else {
+		/* copy the sysrepo startup datastore to snabb */
+		INF_MSG("copy sysrepo data to snabb");
+		rc = sysrepo_datastore_to_snabb(ctx);
+		CHECK_RET(rc, error, "failed to apply sysrepo startup data to snabb: %s", sr_strerror(rc));
+	}
+
+error:
+	if (NULL != values) {
+		sr_free_values(values, value_cnt);
+	}
 	return rc;
 }
 

@@ -31,6 +31,8 @@
 #include "transform.h"
 #include "xpath.h"
 
+#define MAX_NODES 10
+
 bool
 list_or_container(sr_type_t type) {
 	return type == SR_LIST_T || type == SR_CONTAINER_T || type == SR_CONTAINER_PRESENCE_T;
@@ -146,3 +148,196 @@ error:
 	}
 	return rc;
 }
+
+void
+generate_xpath(ctx_t *ctx, char *paths[], int pos, char keys[]) {
+	char *xpath;
+	int i = 0;
+
+	xpath = malloc(sizeof(xpath) * XPATH_MAX_LEN);
+	if (NULL == xpath) {
+		return;
+	}
+	strcpy(xpath, "/");
+	strcat(xpath, ctx->yang_model);
+	strcat(xpath, ":");
+
+	for (i = 0; i < pos; i++) {
+		if (0 != i) {
+			strcat(xpath, "/");
+		}
+		strcat(xpath, paths[i]);
+	}
+
+	INF("XPATH:%s", xpath);
+	free(xpath);
+	return;
+}
+
+/* helper function for searching libyang schema nodes */
+struct lys_node *
+find_node(struct lys_node *node, char *name) {
+	struct lys_node *child = NULL, *tmp = node;
+
+	while(tmp) {
+		if (0 == strncmp(tmp->name, name, strlen(name))) {
+			child = tmp;
+			break;
+		}
+		tmp = tmp->next;
+	}
+
+	return child;
+}
+
+void print_all(struct lyd_node *top) {
+	struct lyd_node *elem;
+	LY_TREE_FOR(top, elem) {
+		printf("name %s\n", lyd_path(elem));
+		if (elem->child) {
+			print_all(elem->child);
+		}
+	}
+}
+
+/* TODO refactor this */
+int
+transform_data_to_array(ctx_t *ctx, char *data, char **xpaths, char **values) {
+	int rc = SR_ERR_OK;
+	char *token, *copy, *tmp, *last;
+	int i = 0, j = 0, counter = 0;
+	char *path[MAX_NODES] = {0};
+	struct lyd_node *parent = NULL, *top_parent = NULL;
+	char keys[MAX_NODES][XPATH_MAX_LEN] = {};
+
+	copy = strdup(data);
+	if (NULL == copy) {
+		rc = SR_ERR_NOMEM;
+		goto error;
+	}
+
+	/* replace escaped new lines */
+	for (i = 0; i < (int) strlen(copy); i++) {
+		if ('\\' == copy[i] && 'n' == copy[i+1]) {
+			copy[i] = '\n';
+			i++;
+			copy[i] = ' ';
+			counter++;
+		}
+	}
+	counter = counter + 2;
+
+	*xpaths = malloc(sizeof(*xpaths) * counter);
+	if (NULL == *xpaths) {
+		rc = SR_ERR_NOMEM;
+		goto error;
+	}
+	*values = malloc(sizeof(*values) * counter);
+	if (NULL == *values) {
+		rc = SR_ERR_NOMEM;
+		goto error;
+	}
+
+	i = 0;
+	while ((token = strsep(&copy, "\n")) != NULL) {
+		i++;
+		while (token != '\0') {
+			if (' ' == *token) {
+				token++;
+			} else {
+				break;
+			}
+		}
+		if (0 == i || 1 == i || 2 == i || counter < i) {
+			continue;
+		}
+		if (3 == i) {
+			/* skip the config part */
+			token = token + 8;
+			tmp = strchr(token, ' ');
+			*tmp = '\0';
+			path[j] = token;
+			parent = lyd_new(parent, ctx->module, token);
+			top_parent = parent;
+			j++;
+			continue;
+		}
+		if (0 == strlen(token)) {
+			continue;
+		} else if ('}' == *token) {
+			j--;
+			continue;
+		} else {
+			last = &token[strlen(token) - 1];
+			tmp = strchr(token, ' ');
+			*tmp = '\0';
+			tmp++;
+			/* get last character in splited line */
+			if ('{' == *last) {
+				path[j] = token;
+				if (parent)
+				printf("add node %s to parent %s\n", token, parent->schema->name);
+				parent = lyd_new(parent, ctx->module, token);
+				j++;
+				continue;
+			} else if ('}' == *last) {
+				path[j] = token;
+				if (parent)
+				printf("parent %s\n", parent->schema->name);
+				parent = parent->parent;
+				j--;
+				continue;
+			} else {
+				*last = '\0';
+				//path[j] = token;
+				//j++;
+				//generate_xpath(ctx, path, j, keys[j]);
+				printf("Value: %s\n", (tmp++));
+				if (parent)
+				printf("add node %s to parent %s\n", token, parent->schema->name);
+				parent = lyd_new_leaf(parent, ctx->module, token, tmp);
+			}
+		}
+	}
+
+	struct lyd_node *elem;
+	LY_TREE_FOR(top_parent, elem) {
+		printf("name %s\n", lyd_path(elem));
+		if (elem->child) {
+			struct lyd_node *elem2;
+			LY_TREE_FOR(elem->child, elem2) {
+				printf("name %s\n", lyd_path(elem2));
+			}
+		}
+	}
+
+	print_all(top_parent);
+
+	if (NULL != copy) {
+		free(copy);
+	}
+	return rc;
+error:
+	if (NULL != copy) {
+		free(copy);
+	}
+	if (NULL != *xpaths) {
+		free(*xpaths);
+	}
+	if (NULL != *values) {
+		free(*values);
+	}
+	return rc;
+}
+//
+//int
+//format_snabb_xpath(ctx_t *ctx, char *data) {
+//	sr_xpath_ctx_t state = {0,0,0,0};
+//	int rc = SR_ERR_OK;
+//
+//	if (NULL == ctx) {
+//		return SR_ERR_INTERNAL;
+//	}
+//
+//	return rc;
+//}

@@ -45,6 +45,7 @@ typedef enum sb_command_e {
 typedef struct ctx_s {
 	const char *yang_model;
     struct ly_ctx *libyang_ctx;
+	const struct lys_module *module;
 	int pid;
 	int socket_fd;
 	char socket_path[UNIX_PATH_MAX];
@@ -74,6 +75,6 @@ void socket_close(ctx_t *ctx);
 int add_action(sr_val_t *val, sr_change_oper_t op);
 int apply_all_actions(ctx_t *ctx);
 
-int sysrepo_datastore_to_snabb(ctx_t *ctx);
+int sync_datastores(ctx_t *ctx);
 
 #endif /* TRANSFORM_H */

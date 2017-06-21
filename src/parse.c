@@ -57,6 +57,8 @@ parse_yang_model(ctx_t *ctx) {
 		goto error;
 	}
 
+	ctx->module = module;
+
 	ctx->libyang_ctx = libyang_ctx;
 
 error:
