@@ -27,6 +27,6 @@
 bool leaf_without_value(sr_type_t type);
 bool list_or_container(sr_type_t type);
 int format_xpath(ctx_t *ctx, action_t *action);
-int transform_data_to_array(ctx_t *ctx, char *data, char **xpath, char **value);
+int transform_data_to_array(ctx_t *ctx, char *data, struct lyd_node **node);
 
 #endif /* XPATH_H */

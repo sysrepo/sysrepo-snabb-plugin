@@ -149,114 +149,39 @@ error:
 	return rc;
 }
 
-void
-generate_xpath(ctx_t *ctx, char *paths[], int pos, char keys[]) {
-	char *xpath;
-	int i = 0;
-
-	xpath = malloc(sizeof(xpath) * XPATH_MAX_LEN);
-	if (NULL == xpath) {
-		return;
-	}
-	strcpy(xpath, "/");
-	strcat(xpath, ctx->yang_model);
-	strcat(xpath, ":");
-
-	for (i = 0; i < pos; i++) {
-		if (0 != i) {
-			strcat(xpath, "/");
-		}
-		strcat(xpath, paths[i]);
-	}
-
-	INF("XPATH:%s", xpath);
-	free(xpath);
-	return;
-}
-
-/* helper function for searching libyang schema nodes */
-struct lys_node *
-find_node(struct lys_node *node, char *name) {
-	struct lys_node *child = NULL, *tmp = node;
-
-	while(tmp) {
-		if (0 == strncmp(tmp->name, name, strlen(name))) {
-			child = tmp;
-			break;
-		}
-		tmp = tmp->next;
-	}
-
-	return child;
-}
-
 void print_all(struct lyd_node *node) {
-INF_MSG("TEST");
 
 	char *data;
 	lyd_print_mem(&data, node, LYD_JSON, LYP_FORMAT);
 	printf("DATA\n%s\n", data);
 
-	if (true) return;
-
-	if (NULL == node) {
-		return;
+	if (data) {
+		free(data);
 	}
-
-INF_MSG("TEST");
-	if (NULL == node->child) {
-		//printf("PATH: %s\n", lyd_path(node));
-		printf("PATH: %s\n", node->schema->name);
-	} else {
-		print_all(node->child);
-	}
-INF_MSG("TEST");
-
-	if (NULL != node->next) {
-		print_all(node->next);
-	}
+	return;
 }
 
 /* TODO refactor this */
 int
-transform_data_to_array(ctx_t *ctx, char *data, char **xpaths, char **values) {
+transform_data_to_array(ctx_t *ctx, char *data, struct lyd_node **node) {
 	int rc = SR_ERR_OK;
-	char *token, *copy, *tmp, *last;
-	int i = 0, j = 0, counter = 0;
-	char *path[MAX_NODES] = {0};
-	struct lyd_node *parent = NULL, *top_parent = NULL, *tmp_node;
-	char keys[MAX_NODES][XPATH_MAX_LEN] = {};
-
-	copy = strdup(data);
-	if (NULL == copy) {
-		rc = SR_ERR_NOMEM;
-		goto error;
-	}
+	char *token, *tmp, *last;
+	int i = 0, counter = 0;
+	struct lyd_node *parent = NULL, *top_parent = NULL;
 
 	/* replace escaped new lines */
-	for (i = 0; i < (int) strlen(copy); i++) {
-		if ('\\' == copy[i] && 'n' == copy[i+1]) {
-			copy[i] = '\n';
+	for (i = 0; i < (int) strlen(data); i++) {
+		if ('\\' == data[i] && 'n' == data[i+1]) {
+			data[i] = '\n';
 			i++;
-			copy[i] = ' ';
+			data[i] = ' ';
 			counter++;
 		}
 	}
 	counter = counter + 2;
 
-	*xpaths = malloc(sizeof(*xpaths) * counter);
-	if (NULL == *xpaths) {
-		rc = SR_ERR_NOMEM;
-		goto error;
-	}
-	*values = malloc(sizeof(*values) * counter);
-	if (NULL == *values) {
-		rc = SR_ERR_NOMEM;
-		goto error;
-	}
-
 	i = 0;
-	while ((token = strsep(&copy, "\n")) != NULL) {
+	while ((token = strsep(&data, "\n")) != NULL) {
 		i++;
 		while (token != '\0') {
 			if (' ' == *token) {
@@ -273,23 +198,16 @@ transform_data_to_array(ctx_t *ctx, char *data, char **xpaths, char **values) {
 			token = token + 8;
 			tmp = strchr(token, ' ');
 			*tmp = '\0';
-			path[j] = token;
+			/* TODO check NULl */
 			parent = lyd_new(parent, ctx->module, token);
-			if (!parent) WRN("no node returned for name %s", token);
 			top_parent = parent;
-			j++;
 			continue;
 		}
 		if (0 == strlen(token)) {
 			continue;
 		} else if ('}' == *token) {
-			if (parent) {
-				printf("parent %s\n", parent->schema->name);
-				parent = parent->parent;
-			} else {
-				INF_MSG("#######################");
-			}
-			j--;
+			/* when list/container are closed set new parent */
+			parent = parent->parent;
 			continue;
 		} else {
 			last = &token[strlen(token) - 1];
@@ -298,49 +216,30 @@ transform_data_to_array(ctx_t *ctx, char *data, char **xpaths, char **values) {
 			tmp++;
 			/* get last character in splited line */
 			if ('{' == *last) {
-				path[j] = token;
+				/* only list/container's have the last element '{' */
+				/* TODO check NULl */
 				parent = lyd_new(parent, ctx->module, token);
-				if (!parent) WRN("no node returned for name %s", token);
-				j++;
 				continue;
 			} else if ('}' == *last) {
-				path[j] = token;
+				/* when list/container are closed set new parent */
 				parent = parent->parent;
-				j--;
 				continue;
 			} else {
 				*last = '\0';
-				//path[j] = token;
-				//j++;
-				//generate_xpath(ctx, path, j, keys[j]);
-				printf("Value: %s\n", tmp);
-				if (parent)
-				printf("add node %s to parent %s\n", token, parent->schema->name);
-				tmp_node = lyd_new_leaf(parent, ctx->module, token, tmp);
-				if (!tmp_node) {
-					WRN("no node returned for name %s", token)
-				} else {
-					INF("add node %s with value %s to parent %s", token, tmp, parent->schema->name);	
-				};
+				/* add leafs */
+				/* TODO check NULl */
+				lyd_new_leaf(parent, ctx->module, token, tmp);
 			}
 		}
 	}
 
 	print_all(top_parent);
 
-	if (NULL != copy) {
-		free(copy);
-	}
-	return rc;
-error:
-	if (NULL != copy) {
-		free(copy);
-	}
-	if (NULL != *xpaths) {
-		free(*xpaths);
-	}
-	if (NULL != *values) {
-		free(*values);
+	*node = top_parent;
+
+	if (NULL != data) {
+		free(data);
+		data = NULL;
 	}
 	return rc;
 }

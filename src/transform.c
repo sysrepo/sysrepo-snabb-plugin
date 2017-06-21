@@ -473,7 +473,7 @@ snabb_datastore_to_sysrepo(ctx_t *ctx) {
 	sb_command_t command;
 	char message[SNABB_MESSAGE_MAX] = {0};
 	char *response = NULL;
-	char *xpaths = NULL, *values = NULL;
+	struct lyd_node *node = NULL;
 
 	snprintf(message, SNABB_MESSAGE_MAX, "get-config {path '/'; schema %s;}", ctx->yang_model);
 	command = SB_GET;
@@ -484,7 +484,13 @@ snabb_datastore_to_sysrepo(ctx_t *ctx) {
 	rc = socket_send(ctx, message, command, &response);
 	CHECK_RET(rc, error, "failed to send message to snabb socket: %s", sr_strerror(rc));
 
-	rc = transform_data_to_array(ctx, response, &xpaths, &values);
+	rc = transform_data_to_array(ctx, response, &node);
+	CHECK_RET(rc, error, "failed parse snabb data in libyang: %s", sr_strerror(rc));
+
+	/* free lyd_node */
+	if (NULL != node) {
+		lyd_free(node);
+	}
 
 error:
 	if (NULL != response) {
