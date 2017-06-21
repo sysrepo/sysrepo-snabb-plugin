@@ -190,13 +190,30 @@ find_node(struct lys_node *node, char *name) {
 	return child;
 }
 
-void print_all(struct lyd_node *top) {
-	struct lyd_node *elem;
-	LY_TREE_FOR(top, elem) {
-		printf("name %s\n", lyd_path(elem));
-		if (elem->child) {
-			print_all(elem->child);
-		}
+void print_all(struct lyd_node *node) {
+INF_MSG("TEST");
+
+	char *data;
+	lyd_print_mem(&data, node, LYD_JSON, LYP_FORMAT);
+	printf("DATA\n%s\n", data);
+
+	if (true) return;
+
+	if (NULL == node) {
+		return;
+	}
+
+INF_MSG("TEST");
+	if (NULL == node->child) {
+		//printf("PATH: %s\n", lyd_path(node));
+		printf("PATH: %s\n", node->schema->name);
+	} else {
+		print_all(node->child);
+	}
+INF_MSG("TEST");
+
+	if (NULL != node->next) {
+		print_all(node->next);
 	}
 }
 
@@ -207,7 +224,7 @@ transform_data_to_array(ctx_t *ctx, char *data, char **xpaths, char **values) {
 	char *token, *copy, *tmp, *last;
 	int i = 0, j = 0, counter = 0;
 	char *path[MAX_NODES] = {0};
-	struct lyd_node *parent = NULL, *top_parent = NULL;
+	struct lyd_node *parent = NULL, *top_parent = NULL, *tmp_node;
 	char keys[MAX_NODES][XPATH_MAX_LEN] = {};
 
 	copy = strdup(data);
@@ -258,6 +275,7 @@ transform_data_to_array(ctx_t *ctx, char *data, char **xpaths, char **values) {
 			*tmp = '\0';
 			path[j] = token;
 			parent = lyd_new(parent, ctx->module, token);
+			if (!parent) WRN("no node returned for name %s", token);
 			top_parent = parent;
 			j++;
 			continue;
@@ -265,6 +283,12 @@ transform_data_to_array(ctx_t *ctx, char *data, char **xpaths, char **values) {
 		if (0 == strlen(token)) {
 			continue;
 		} else if ('}' == *token) {
+			if (parent) {
+				printf("parent %s\n", parent->schema->name);
+				parent = parent->parent;
+			} else {
+				INF_MSG("#######################");
+			}
 			j--;
 			continue;
 		} else {
@@ -275,15 +299,12 @@ transform_data_to_array(ctx_t *ctx, char *data, char **xpaths, char **values) {
 			/* get last character in splited line */
 			if ('{' == *last) {
 				path[j] = token;
-				if (parent)
-				printf("add node %s to parent %s\n", token, parent->schema->name);
 				parent = lyd_new(parent, ctx->module, token);
+				if (!parent) WRN("no node returned for name %s", token);
 				j++;
 				continue;
 			} else if ('}' == *last) {
 				path[j] = token;
-				if (parent)
-				printf("parent %s\n", parent->schema->name);
 				parent = parent->parent;
 				j--;
 				continue;
@@ -292,21 +313,15 @@ transform_data_to_array(ctx_t *ctx, char *data, char **xpaths, char **values) {
 				//path[j] = token;
 				//j++;
 				//generate_xpath(ctx, path, j, keys[j]);
-				printf("Value: %s\n", (tmp++));
+				printf("Value: %s\n", tmp);
 				if (parent)
 				printf("add node %s to parent %s\n", token, parent->schema->name);
-				parent = lyd_new_leaf(parent, ctx->module, token, tmp);
-			}
-		}
-	}
-
-	struct lyd_node *elem;
-	LY_TREE_FOR(top_parent, elem) {
-		printf("name %s\n", lyd_path(elem));
-		if (elem->child) {
-			struct lyd_node *elem2;
-			LY_TREE_FOR(elem->child, elem2) {
-				printf("name %s\n", lyd_path(elem2));
+				tmp_node = lyd_new_leaf(parent, ctx->module, token, tmp);
+				if (!tmp_node) {
+					WRN("no node returned for name %s", token)
+				} else {
+					INF("add node %s with value %s to parent %s", token, tmp, parent->schema->name);	
+				};
 			}
 		}
 	}
