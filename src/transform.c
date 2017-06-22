@@ -468,6 +468,35 @@ error:
 }
 
 int
+libyang_data_to_sysrepo(ctx_t *ctx, struct lyd_node *root) {
+    const struct lyd_node *node, *next;
+	char *xpath = NULL;
+	int rc = SR_ERR_OK;
+	sr_session_ctx_t *startup = ctx->startup_sess;
+	sr_session_ctx_t *running = ctx->sess;
+
+	LY_TREE_DFS_BEGIN(root, next, node) {
+		if (LYS_LEAF == node->schema->nodetype || LYS_LEAFLIST == node->schema->nodetype) {
+			struct lyd_node_leaf_list *leaf = (struct lyd_node_leaf_list *) node;
+			/*TODO skip key nodes, sysrepo will show error messages in the logs */
+			//TODO check NULL
+			xpath = lyd_path(node);
+			//TODO check rc
+			rc = sr_set_item_str(startup, xpath, leaf->value_str, SR_EDIT_DEFAULT);
+			rc = sr_set_item_str(running, xpath, leaf->value_str, SR_EDIT_DEFAULT);
+			free(xpath);
+		}
+		LY_TREE_DFS_END(root, next, node);
+	}
+
+	//TODO check rc
+	rc = sr_commit(startup);
+	rc = sr_commit(running);
+
+	return rc;
+}
+
+int
 snabb_datastore_to_sysrepo(ctx_t *ctx) {
 	int rc = SR_ERR_OK;
 	sb_command_t command;
@@ -486,6 +515,11 @@ snabb_datastore_to_sysrepo(ctx_t *ctx) {
 
 	rc = transform_data_to_array(ctx, response, &node);
 	CHECK_RET(rc, error, "failed parse snabb data in libyang: %s", sr_strerror(rc));
+
+	INF_MSG("TEST");
+	rc = libyang_data_to_sysrepo(ctx, node);
+	CHECK_RET(rc, error, "failed to apply libyang daat to sysrepo: %s", sr_strerror(rc));
+	INF_MSG("TEST");
 
 	/* free lyd_node */
 	if (NULL != node) {
@@ -507,14 +541,19 @@ sync_datastores(ctx_t *ctx) {
 	size_t value_cnt = 0;
 
 	snprintf(xpath, XPATH_MAX_LEN, "/%s:*", ctx->yang_model);
+	/* check if no items are in the datastore
+	 * if yes, srget_items will return error code "no items"
+	 */
 	rc = sr_get_items(ctx->startup_sess, xpath, &values, &value_cnt);
-	CHECK_RET(rc, error, "failed sr_get_items: %s", sr_strerror(rc));
+	if (SR_ERR_NOT_FOUND != rc) {
+		CHECK_RET(rc, error, "failed sr_get_items: %s", sr_strerror(rc));
+	}
 
 	//if (NULL == values) {
 	if (true) {
 		/* copy the snabb datastore to sysrepo */
 		INF_MSG("copy snabb data to sysrepo");
-		snabb_datastore_to_sysrepo(ctx);
+		rc = snabb_datastore_to_sysrepo(ctx);
 		CHECK_RET(rc, error, "failed to apply snabb data to sysrepo: %s", sr_strerror(rc));
 	} else {
 		/* copy the sysrepo startup datastore to snabb */

@@ -149,15 +149,39 @@ error:
 	return rc;
 }
 
-void print_all(struct lyd_node *node) {
+void add_default_nodes(ctx_t *ctx, struct lyd_node *root) {
+    const struct lyd_node *node, *next;
 
-	char *data;
-	lyd_print_mem(&data, node, LYD_JSON, LYP_FORMAT);
-	printf("DATA\n%s\n", data);
+	LY_TREE_DFS_BEGIN(root, next, node) {
+		if (LYS_LIST == node->schema->nodetype || LYS_CONTAINER == node->schema->nodetype) {
+			//printf("XPATH:%s\n", lyd_path(node));
+			struct lys_node *next, *elem;
+			LY_TREE_FOR_SAFE(node->schema->child, next, elem) {
+				if (elem->nodetype == LYS_LEAF || elem->nodetype == LYS_LEAFLIST) {
+					struct lys_node_leaf *leaf = (struct lys_node_leaf *) elem;
+					/* check if node exists 
+					 * if not add a data node with default value
+					 */
+					if (NULL != leaf->dflt) {
+						//printf("default value for node %s is %s\n", leaf->name, leaf->dflt);
+						struct lyd_node *lyd_next, *lyd_elem;
+						bool found = false;
+						LY_TREE_FOR_SAFE(node->child, lyd_next, lyd_elem) {
+							if (0 == strncmp(lyd_elem->schema->name, leaf->name, strlen(leaf->name))) {
+								found = true;
+							}
+						}
+						if (false == found) {
+							lyd_new_leaf(node, ctx->module, leaf->name, leaf->dflt);
+						}
+					}
+				}
 
-	if (data) {
-		free(data);
+			}
+		}
+		LY_TREE_DFS_END(root, next, node);
 	}
+
 	return;
 }
 
@@ -221,6 +245,7 @@ transform_data_to_array(ctx_t *ctx, char *data, struct lyd_node **node) {
 				parent = lyd_new(parent, ctx->module, token);
 				continue;
 			} else if ('}' == *last) {
+				/* check if default nodes are added for keys */
 				/* when list/container are closed set new parent */
 				parent = parent->parent;
 				continue;
@@ -233,25 +258,22 @@ transform_data_to_array(ctx_t *ctx, char *data, struct lyd_node **node) {
 		}
 	}
 
-	print_all(top_parent);
+	/* add default values */
+	add_default_nodes(ctx, top_parent);
 
+/*
+	char *tmp_data;
+	lyd_print_mem(&tmp_data, top_parent, LYD_JSON, LYP_FORMAT);
+	printf("%s\n", tmp_data);
+	parent = lyd_parse_mem(ctx->libyang_ctx, tmp_data, LYD_JSON, LYP_FORMAT);
+	free(tmp_data);
+*/
 	*node = top_parent;
 
 	if (NULL != data) {
 		free(data);
 		data = NULL;
 	}
+
 	return rc;
 }
-//
-//int
-//format_snabb_xpath(ctx_t *ctx, char *data) {
-//	sr_xpath_ctx_t state = {0,0,0,0};
-//	int rc = SR_ERR_OK;
-//
-//	if (NULL == ctx) {
-//		return SR_ERR_INTERNAL;
-//	}
-//
-//	return rc;
-//}

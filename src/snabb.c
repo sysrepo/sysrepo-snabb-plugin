@@ -183,6 +183,7 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
 	ctx->yang_model = YANG_MODEL;
 	ctx->libyang_ctx = NULL;
 	ctx->sub = subscription;
+	ctx->sess = session;
 	ctx->running_sess = session;
 	ctx->socket_fd = -1;
 
