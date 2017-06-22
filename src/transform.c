@@ -468,12 +468,10 @@ error:
 }
 
 int
-libyang_data_to_sysrepo(ctx_t *ctx, struct lyd_node *root) {
+libyang_data_to_sysrepo(sr_session_ctx_t *session, struct lyd_node *root) {
     const struct lyd_node *node, *next;
 	char *xpath = NULL;
 	int rc = SR_ERR_OK;
-	sr_session_ctx_t *startup = ctx->startup_sess;
-	sr_session_ctx_t *running = ctx->sess;
 
 	LY_TREE_DFS_BEGIN(root, next, node) {
 		if (LYS_LEAF == node->schema->nodetype || LYS_LEAFLIST == node->schema->nodetype) {
@@ -489,17 +487,12 @@ libyang_data_to_sysrepo(ctx_t *ctx, struct lyd_node *root) {
 				}
 			}
 			if (!skip) {
-				//TODO check NULL
 				xpath = lyd_path(node);
 				if (NULL == xpath) {
 					rc = SR_ERR_NOMEM;
 					goto error;
 				}
-				//TODO check rc
-				printf("%s: %s\n", xpath, leaf->value_str);
-				rc = sr_set_item_str(startup, xpath, leaf->value_str, SR_EDIT_DEFAULT);
-				CHECK_RET(rc, error, "failed sr_set_item_str: %s", sr_strerror(rc));
-				rc = sr_set_item_str(running, xpath, leaf->value_str, SR_EDIT_DEFAULT);
+				rc = sr_set_item_str(session, xpath, leaf->value_str, SR_EDIT_DEFAULT);
 				CHECK_RET(rc, error, "failed sr_set_item_str: %s", sr_strerror(rc));
 				free(xpath);
 			}
@@ -507,10 +500,7 @@ libyang_data_to_sysrepo(ctx_t *ctx, struct lyd_node *root) {
 		LY_TREE_DFS_END(root, next, node);
 	}
 
-	//TODO check rc
-	rc = sr_commit(startup);
-	CHECK_RET(rc, error, "failed sr_commit: %s", sr_strerror(rc));
-	rc = sr_commit(running);
+	rc = sr_commit(session);
 	CHECK_RET(rc, error, "failed sr_commit: %s", sr_strerror(rc));
 
 	xpath = NULL;
@@ -541,7 +531,12 @@ snabb_datastore_to_sysrepo(ctx_t *ctx) {
 	rc = transform_data_to_array(ctx, response, &node);
 	CHECK_RET(rc, error, "failed parse snabb data in libyang: %s", sr_strerror(rc));
 
-	rc = libyang_data_to_sysrepo(ctx, node);
+	/* copy snabb daat to startup datastore */
+	rc = libyang_data_to_sysrepo(ctx->startup_sess, node);
+	CHECK_RET(rc, error, "failed to apply libyang daat to sysrepo: %s", sr_strerror(rc));
+
+	/* copy snabb daat to startup datastore */
+	rc = libyang_data_to_sysrepo(ctx->sess, node);
 	CHECK_RET(rc, error, "failed to apply libyang daat to sysrepo: %s", sr_strerror(rc));
 
 	/* free lyd_node */
