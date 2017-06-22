@@ -172,9 +172,23 @@ error:
 	return rc;
 }
 
+static int
+state_data_cb(const char *xpath, sr_val_t **values, size_t *values_cnt, void *private_ctx)
+{
+    int rc = SR_ERR_OK;
+
+	ctx_t *ctx = private_ctx;
+	rc = snabb_state_data_to_sysrepo(ctx, (char *) xpath, values, values_cnt);
+	CHECK_RET(rc, error, "failed to load state data: %s", sr_strerror(rc));
+
+error:
+    return rc;
+}
+
 int
 sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
 	sr_subscription_ctx_t *subscription = NULL;
+	char xpath[XPATH_MAX_LEN] = {0};
 	int rc = SR_ERR_OK;
 	ctx_t *ctx = NULL;
 	int32_t pid = 0;
@@ -186,6 +200,8 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
 	ctx->sess = session;
 	ctx->running_sess = session;
 	ctx->socket_fd = -1;
+
+	snprintf(xpath, XPATH_MAX_LEN, "/%s:softwire-state", ctx->yang_model);
 
 	/* get snabb process ID */
 	rc = get_snabb_pid("%d", &pid);
@@ -199,6 +215,8 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
 
 	INF("%s plugin initialized successfully", ctx->yang_model);
 
+	rc = sr_dp_get_items_subscribe(session, xpath, state_data_cb, ctx, SR_SUBSCR_DEFAULT, &ctx->sub);
+	CHECK_RET(rc, error, "failed sr_dp_get_items_subscribe: %s", sr_strerror(rc));
 	/* set subscription as our private context */
 	*private_ctx = ctx;
 

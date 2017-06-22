@@ -308,7 +308,7 @@ add_action(sr_val_t *val, sr_change_oper_t op) {
 	int rc = SR_ERR_OK;
 
 	action_t *action = malloc(sizeof(action_t));
-    if (!list_or_container(val->type) && !leaf_without_value(val->type) && SR_OP_MODIFIED == op) {
+	if (!list_or_container(val->type) && !leaf_without_value(val->type) && SR_OP_MODIFIED == op) {
 		action->value = sr_val_to_str(val);
 		if (NULL == action->value) {
 			free(action);
@@ -469,7 +469,7 @@ error:
 
 int
 libyang_data_to_sysrepo(sr_session_ctx_t *session, struct lyd_node *root) {
-    const struct lyd_node *node, *next;
+	const struct lyd_node *node, *next;
 	char *xpath = NULL;
 	int rc = SR_ERR_OK;
 
@@ -528,7 +528,7 @@ snabb_datastore_to_sysrepo(ctx_t *ctx) {
 	rc = socket_send(ctx, message, command, &response);
 	CHECK_RET(rc, error, "failed to send message to snabb socket: %s", sr_strerror(rc));
 
-	rc = transform_data_to_array(ctx, response, &node);
+	rc = transform_data_to_array(ctx, NULL, response, &node);
 	CHECK_RET(rc, error, "failed parse snabb data in libyang: %s", sr_strerror(rc));
 
 	/* copy snabb daat to startup datastore */
@@ -567,8 +567,7 @@ sync_datastores(ctx_t *ctx) {
 		CHECK_RET(rc, error, "failed sr_get_items: %s", sr_strerror(rc));
 	}
 
-	//if (NULL == values) {
-	if (true) {
+	if (NULL == values) {
 		/* copy the snabb datastore to sysrepo */
 		INF_MSG("copy snabb data to sysrepo");
 		rc = snabb_datastore_to_sysrepo(ctx);
@@ -629,5 +628,113 @@ cleanup:
 		sr_disconnect(connection);
 	}
 
+	return rc;
+}
+
+static sr_type_t
+sr_ly_data_type_to_sr(LY_DATA_TYPE type)
+{
+	switch(type){
+		case LY_TYPE_BINARY:
+			return SR_BINARY_T;
+		case LY_TYPE_BITS:
+			return SR_BITS_T;
+		case LY_TYPE_BOOL:
+			return SR_BOOL_T;
+		case LY_TYPE_DEC64:
+			return SR_DECIMAL64_T;
+		case LY_TYPE_EMPTY:
+			return SR_LEAF_EMPTY_T;
+		case LY_TYPE_ENUM:
+			return SR_ENUM_T;
+		case LY_TYPE_IDENT:
+			return SR_IDENTITYREF_T;
+		case LY_TYPE_INST:
+			return SR_INSTANCEID_T;
+		case LY_TYPE_STRING:
+			return SR_STRING_T;
+		case LY_TYPE_INT8:
+			return SR_INT8_T;
+		case LY_TYPE_UINT8:
+			return SR_UINT8_T;
+		case LY_TYPE_INT16:
+			return SR_INT16_T;
+		case LY_TYPE_UINT16:
+			return SR_UINT16_T;
+		case LY_TYPE_INT32:
+			return SR_INT32_T;
+		case LY_TYPE_UINT32:
+			return SR_UINT32_T;
+		case LY_TYPE_INT64:
+			return SR_INT64_T;
+		case LY_TYPE_UINT64:
+			return SR_UINT64_T;
+		default:
+			return SR_UNKNOWN_T;
+			//LY_LEAF_REF
+			//LY_DERIVED
+			//LY_TYPE_UNION
+		}
+}
+
+int
+snabb_state_data_to_sysrepo(ctx_t *ctx, char *xpath, sr_val_t **values, size_t *values_cnt) {
+	int rc = SR_ERR_OK;
+	sb_command_t command;
+	char message[SNABB_MESSAGE_MAX] = {0};
+	char *response = NULL;
+	struct lyd_node *root = NULL;
+	action_t *action = NULL;
+	int cnt = 0;
+
+	action = malloc(sizeof(action_t));
+	if (NULL == action) {
+		rc = SR_ERR_NOMEM;
+		goto error;
+	}
+	action->xpath = strdup(xpath);
+
+	INF("XPATH: %s", xpath);
+	rc = format_xpath(ctx, action);
+	CHECK_RET(rc, error, "failed to format xpath: %s", sr_strerror(rc));
+
+	snprintf(message, SNABB_MESSAGE_MAX, "get-state {path '%s'; schema %s;}", action->snabb_xpath, ctx->yang_model);
+	free_action(action);
+	action = NULL;
+	command = SB_GET;
+
+	INF("%s", message);
+	/* send to socket */
+	INF_MSG("send to socket");
+	rc = socket_send(ctx, message, command, &response);
+	CHECK_RET(rc, error, "failed to send message to snabb socket: %s", sr_strerror(rc));
+
+	printf("RESPONSE:\n%s\n", response);
+
+	rc = transform_data_to_array(ctx, xpath, response, &root);
+	CHECK_RET(rc, error, "failed parse snabb data in libyang: %s", sr_strerror(rc));
+
+	const struct lyd_node *node, *next;
+	LY_TREE_DFS_BEGIN(root, next, node) {
+		if (LYS_LEAF == node->schema->nodetype || LYS_LEAFLIST == node->schema->nodetype) {
+			char *path = lyd_path(node);
+			printf("XPATH:%s\n", path);
+			free(path);
+			cnt++;
+		}
+		LY_TREE_DFS_END(root, next, node);
+	}
+
+error:
+	/* free lyd_node */
+	if (NULL != action) {
+		free_action(action);
+	}
+	if (NULL != root) {
+		lyd_free(root);
+	}
+	if (NULL != response) {
+		free(response);
+	}
 	return rc;
 }

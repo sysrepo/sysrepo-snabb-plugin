@@ -72,6 +72,8 @@ void clear_context(ctx_t *ctx);
 int socket_connect(ctx_t *ctx);
 void socket_close(ctx_t *ctx);
 
+int snabb_state_data_to_sysrepo(ctx_t *ctx, char *xpath, sr_val_t **values, size_t *values_cnt);
+
 int add_action(sr_val_t *val, sr_change_oper_t op);
 int apply_all_actions(ctx_t *ctx);
 

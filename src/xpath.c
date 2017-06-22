@@ -61,14 +61,14 @@ format_xpath(ctx_t *ctx, action_t *action) {
 	if (NULL == xpath) {
 		rc = SR_ERR_NOMEM;
 		goto error;
-	}		
+	}
 	strcpy(xpath, "");
 
 	tmp = malloc(sizeof(tmp) * strlen(action->xpath));
 	if (NULL == tmp) {
 		rc = SR_ERR_NOMEM;
 		goto error;
-	}		
+	}
 
 	node = sr_xpath_next_node(action->xpath, &state);
 	if (NULL == node) {
@@ -154,12 +154,11 @@ void add_default_nodes(ctx_t *ctx, struct lyd_node *root) {
 
 	LY_TREE_DFS_BEGIN(root, next, node) {
 		if (LYS_LIST == node->schema->nodetype || LYS_CONTAINER == node->schema->nodetype) {
-			//printf("XPATH:%s\n", lyd_path(node));
 			struct lys_node *next, *elem;
 			LY_TREE_FOR_SAFE(node->schema->child, next, elem) {
 				if (elem->nodetype == LYS_LEAF || elem->nodetype == LYS_LEAFLIST) {
 					struct lys_node_leaf *leaf = (struct lys_node_leaf *) elem;
-					/* check if node exists 
+					/* check if node exists
 					 * if not add a data node with default value
 					 */
 					if (NULL != leaf->dflt) {
@@ -172,7 +171,7 @@ void add_default_nodes(ctx_t *ctx, struct lyd_node *root) {
 							}
 						}
 						if (false == found) {
-							lyd_new_leaf(node, ctx->module, leaf->name, leaf->dflt);
+							lyd_new_leaf((struct lyd_node *) node, ctx->module, leaf->name, leaf->dflt);
 						}
 					}
 				}
@@ -187,11 +186,11 @@ void add_default_nodes(ctx_t *ctx, struct lyd_node *root) {
 
 /* TODO refactor this */
 int
-transform_data_to_array(ctx_t *ctx, char *data, struct lyd_node **node) {
+transform_data_to_array(ctx_t *ctx, char *xpath, char *data, struct lyd_node **node) {
 	int rc = SR_ERR_OK;
 	char *token, *tmp, *last;
 	int i = 0, counter = 0;
-	struct lyd_node *parent = NULL, *top_parent = NULL;
+	struct lyd_node *parent = NULL, *top_parent = NULL, *check = NULL;
 
 	/* replace escaped new lines */
 	for (i = 0; i < (int) strlen(data); i++) {
@@ -203,6 +202,28 @@ transform_data_to_array(ctx_t *ctx, char *data, struct lyd_node **node) {
 		}
 	}
 	counter = counter + 2;
+
+	/* transform xpath to lyd_node's
+	 * ignore key nodes if they exist
+	 */
+	if (NULL != xpath) {
+		sr_xpath_ctx_t state = {0,0,0,0};
+		char *xpath_elem = NULL;
+		while (true) {
+			if (NULL == xpath_elem) {
+				xpath_elem = sr_xpath_next_node(xpath, &state);
+			} else {
+				xpath_elem = sr_xpath_next_node(NULL, &state);
+			}
+			if (NULL == xpath_elem) {
+				break;
+			}
+			parent = lyd_new(parent, ctx->module, xpath_elem);
+			if (NULL == top_parent) {
+				top_parent = parent;
+			}
+		}
+	}
 
 	i = 0;
 	while ((token = strsep(&data, "\n")) != NULL) {
@@ -217,14 +238,36 @@ transform_data_to_array(ctx_t *ctx, char *data, struct lyd_node **node) {
 		if (0 == i || 1 == i || 2 == i || counter < i) {
 			continue;
 		}
+		/* TODO make more general case, remove continue */
 		if (3 == i) {
+			INF("%s", token);
 			/* skip the config part */
-			token = token + 8;
-			tmp = strchr(token, ' ');
-			*tmp = '\0';
+			INF("%s", token);
 			/* TODO check NULl */
-			parent = lyd_new(parent, ctx->module, token);
-			top_parent = parent;
+			if (NULL == xpath) {
+				token = token + 8;
+				tmp = strchr(token, ' ');
+				*tmp = '\0';
+				parent = lyd_new(parent, ctx->module, token);
+				if (NULL == parent) {
+					rc = SR_ERR_INTERNAL;
+					goto error;
+				}
+				top_parent = parent;
+			} else {
+				last = &token[strlen(token) - 1];
+				*last = '\0';
+				token = token + 7;
+				tmp = strchr(token, ' ');
+				*tmp = '\0';
+				tmp++;
+				check = lyd_new_leaf(parent, ctx->module, token, tmp);
+				if (NULL == check) {
+					rc = SR_ERR_INTERNAL;
+					goto error;
+				}
+
+			}
 			continue;
 		}
 		if (0 == strlen(token)) {
@@ -238,14 +281,16 @@ transform_data_to_array(ctx_t *ctx, char *data, struct lyd_node **node) {
 			tmp = strchr(token, ' ');
 			*tmp = '\0';
 			tmp++;
-			/* get last character in splited line */
 			if ('{' == *last) {
 				/* only list/container's have the last element '{' */
 				/* TODO check NULl */
 				parent = lyd_new(parent, ctx->module, token);
+				if (NULL == parent) {
+					rc = SR_ERR_INTERNAL;
+					goto error;
+				}
 				continue;
 			} else if ('}' == *last) {
-				/* check if default nodes are added for keys */
 				/* when list/container are closed set new parent */
 				parent = parent->parent;
 				continue;
@@ -253,27 +298,25 @@ transform_data_to_array(ctx_t *ctx, char *data, struct lyd_node **node) {
 				*last = '\0';
 				/* add leafs */
 				/* TODO check NULl */
-				lyd_new_leaf(parent, ctx->module, token, tmp);
+				check = lyd_new_leaf(parent, ctx->module, token, tmp);
+				if (NULL == check) {
+					rc = SR_ERR_INTERNAL;
+					goto error;
+				}
 			}
 		}
 	}
-
 	/* add default values */
 	add_default_nodes(ctx, top_parent);
 
-/*
-	char *tmp_data;
-	lyd_print_mem(&tmp_data, top_parent, LYD_JSON, LYP_FORMAT);
-	printf("%s\n", tmp_data);
-	parent = lyd_parse_mem(ctx->libyang_ctx, tmp_data, LYD_JSON, LYP_FORMAT);
-	free(tmp_data);
-*/
-	*node = top_parent;
-
-	if (NULL != data) {
-		free(data);
-		data = NULL;
+	/* validate the libyang data nodes */
+	if (0 != lyd_validate(&top_parent, LYD_OPT_GET, NULL)) {
+		rc = SR_ERR_INTERNAL;
+		goto error;
 	}
+
+error:
+	*node = top_parent;
 
 	return rc;
 }
