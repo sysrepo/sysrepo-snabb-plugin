@@ -162,7 +162,6 @@ void add_default_nodes(ctx_t *ctx, struct lyd_node *root) {
 					 * if not add a data node with default value
 					 */
 					if (NULL != leaf->dflt) {
-						//printf("default value for node %s is %s\n", leaf->name, leaf->dflt);
 						struct lyd_node *lyd_next, *lyd_elem;
 						bool found = false;
 						LY_TREE_FOR_SAFE(node->child, lyd_next, lyd_elem) {
@@ -240,35 +239,9 @@ transform_data_to_array(ctx_t *ctx, char *xpath, char *data, struct lyd_node **n
 		}
 		/* TODO make more general case, remove continue */
 		if (3 == i) {
-			INF("%s", token);
-			/* skip the config part */
-			INF("%s", token);
+			/* skip the config or state part */
 			/* TODO check NULl */
-			if (NULL == xpath) {
-				token = token + 8;
-				tmp = strchr(token, ' ');
-				*tmp = '\0';
-				parent = lyd_new(parent, ctx->module, token);
-				if (NULL == parent) {
-					rc = SR_ERR_INTERNAL;
-					goto error;
-				}
-				top_parent = parent;
-			} else {
-				last = &token[strlen(token) - 1];
-				*last = '\0';
-				token = token + 7;
-				tmp = strchr(token, ' ');
-				*tmp = '\0';
-				tmp++;
-				check = lyd_new_leaf(parent, ctx->module, token, tmp);
-				if (NULL == check) {
-					rc = SR_ERR_INTERNAL;
-					goto error;
-				}
-
-			}
-			continue;
+			token = (NULL == xpath) ? token + 8 : token + 7;
 		}
 		if (0 == strlen(token)) {
 			continue;
@@ -288,6 +261,9 @@ transform_data_to_array(ctx_t *ctx, char *xpath, char *data, struct lyd_node **n
 				if (NULL == parent) {
 					rc = SR_ERR_INTERNAL;
 					goto error;
+				}
+				if (NULL == top_parent) {
+					top_parent = parent;
 				}
 				continue;
 			} else if ('}' == *last) {
