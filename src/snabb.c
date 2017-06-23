@@ -215,7 +215,7 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
 	ctx->pid = pid;
 	INF("snabb pid is %d", pid);
 
-	rc = sr_module_change_subscribe(session, ctx->yang_model, module_change_cb, ctx, 0, SR_SUBSCR_DEFAULT, &ctx->sub);
+	rc = sr_module_change_subscribe(session, ctx->yang_model, module_change_cb, ctx, 0, SR_SUBSCR_CTX_REUSE, &ctx->sub);
 	CHECK_RET(rc, error, "failed sr_module_change_subscribe: %s", sr_strerror(rc));
 
 	INF("%s plugin initialized successfully", ctx->yang_model);
@@ -245,7 +245,7 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
 	rc = sync_datastores(ctx);
 	CHECK_RET(rc, error, "failed to apply sysrepo startup data to snabb: %s", sr_strerror(rc));
 
-	rc = sr_dp_get_items_subscribe(session, xpath, state_data_cb, ctx, SR_SUBSCR_DEFAULT, &ctx->sub);
+	rc = sr_dp_get_items_subscribe(session, xpath, state_data_cb, ctx, SR_SUBSCR_CTX_REUSE, &ctx->sub);
 	CHECK_RET(rc, error, "failed sr_dp_get_items_subscribe: %s", sr_strerror(rc));
 
 	return SR_ERR_OK;
