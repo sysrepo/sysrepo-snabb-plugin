@@ -38,7 +38,7 @@ int socket_send(ctx_t *ctx, char *message, sb_command_t command, char **response
 int xpath_to_snabb(ctx_t *ctx, action_t *action, char **message);
 int sysrepo_to_snabb(ctx_t *ctx, action_t *action);
 int add_action(sr_val_t *val, sr_change_oper_t op);
-void clear_all_actions();
+void free_all_actions();
 void free_action(action_t *action);
 int apply_action(ctx_t *ctx, action_t *action);
 
@@ -361,10 +361,11 @@ free_action(action_t *action) {
 		free(action->snabb_xpath);
 	}
 	free(action);
+	action = NULL;
 }
 
 void
-clear_all_actions() {
+free_all_actions() {
 	action_t *tmp = NULL;
 	while (!LIST_EMPTY(&head)) {
 		tmp = LIST_FIRST(&head);
@@ -382,12 +383,12 @@ apply_all_actions(ctx_t *ctx) {
 		CHECK_RET(rc, rollback, "failed apply action: %s", sr_strerror(rc));
 	}
 
-	clear_all_actions();
+	free_all_actions();
 	return rc;
 
 rollback:
 	//TODO do a rollback
-	clear_all_actions();
+	free_all_actions();
 	return rc;
 }
 
@@ -437,6 +438,7 @@ sysrepo_datastore_to_snabb(ctx_t *ctx) {
 			goto error;
 		}
 		snprintf(xpath, XPATH_MAX_LEN, "/%s:%s", ctx->yang_model, trees[i].name);
+		action->value = NULL;
 		action->xpath = strdup(xpath);
 		action->snabb_xpath = NULL;
 		action->op = SR_OP_CREATED;
@@ -747,6 +749,8 @@ snabb_state_data_to_sysrepo(ctx_t *ctx, char *xpath, sr_val_t **values, size_t *
 		goto error;
 	}
 	action->xpath = strdup(xpath);
+	action->snabb_xpath = NULL;
+	action->value = NULL;
 
 	rc = format_xpath(ctx, action);
 	CHECK_RET(rc, error, "failed to format xpath: %s", sr_strerror(rc));
