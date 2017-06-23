@@ -570,6 +570,10 @@ sync_datastores(ctx_t *ctx) {
 	if (NULL == values) {
 		/* copy the snabb datastore to sysrepo */
 		INF_MSG("copy snabb data to sysrepo");
+		/* TODO make this more robust
+		 * create a list with executed xpath's
+		 */
+		ctx->skip = true;
 		rc = snabb_datastore_to_sysrepo(ctx);
 		CHECK_RET(rc, error, "failed to apply snabb data to sysrepo: %s", sr_strerror(rc));
 	} else {

@@ -54,6 +54,7 @@ typedef struct ctx_s {
 	sr_session_ctx_t *running_sess;
 	sr_conn_ctx_t *startup_conn;
 	sr_session_ctx_t *startup_sess;
+	bool skip;
 } ctx_t;
 
 typedef struct action_s {
