@@ -33,6 +33,36 @@
 
 #define MAX_NODES 10
 
+int
+get_yang_type(ctx_t *ctx, action_t *action) {
+	struct lys_node *node = NULL;
+	struct ly_set *set = NULL;
+	int rc = SR_ERR_OK;
+
+	/* check if leaf-list */
+	set = lys_find_xpath(ctx->libyang_ctx, NULL, action->xpath, 0);
+	if (NULL == set) {
+		rc = SR_ERR_INTERNAL;
+		goto error;
+	}
+
+	/* we expect only one node */
+	if (set->number > 1) {
+		rc = SR_ERR_INTERNAL;
+		goto error;
+	}
+
+	node = set->set.s[0];
+
+	action->yang_type = node->nodetype;
+
+error:
+	if (NULL != set) {
+		ly_set_free(set);
+	}
+	return rc;
+}
+
 bool
 list_or_container(sr_type_t type) {
 	return type == SR_LIST_T || type == SR_CONTAINER_T || type == SR_CONTAINER_PRESENCE_T;
@@ -50,9 +80,7 @@ leaf_without_value(sr_type_t type) {
  */
 int
 format_xpath(ctx_t *ctx, action_t *action) {
-	struct ly_set *schema_node = NULL;
 	char *xpath = NULL, *node = NULL, *tmp = NULL;
-	struct lys_node *lys = NULL;
 	sr_xpath_ctx_t state = {0,0,0,0};
 	int rc = SR_ERR_OK;
 
@@ -110,21 +138,8 @@ format_xpath(ctx_t *ctx, action_t *action) {
 		}
 	}
 
-	/* check if leaf-list */
-	schema_node = lys_find_xpath(ctx->libyang_ctx, NULL, action->xpath, 0);
-	if (NULL == schema_node) {
-		rc = SR_ERR_INTERNAL;
-		goto error;
-	}
-
-	if (schema_node->number > 1) {
-		rc = SR_ERR_INTERNAL;
-		goto error;
-	}
-
-	lys = schema_node->set.s[0];
-
-	if (LYS_LEAFLIST == lys->nodetype) {
+	/* check if leaf-list for empty list's*/
+	if (LYS_LEAFLIST == action->yang_type) {
 		node = sr_xpath_last_node(NULL, &state);
 		if (NULL == node) {
 			rc = SR_ERR_INTERNAL;
@@ -132,14 +147,13 @@ format_xpath(ctx_t *ctx, action_t *action) {
 		}
 		/* remove last node from xpath */
 		action->snabb_xpath = strndup(xpath, strlen(xpath) - 1 - strlen(node));
+		/* set action to created regardlse what the original is */
+		action->op = SR_OP_CREATED;
 	} else {
 		action->snabb_xpath = strdup(xpath);
 	}
 
 error:
-	if (NULL != schema_node) {
-		ly_set_free(schema_node);
-	}
 	if (NULL != tmp) {
 		free(tmp);
 	}

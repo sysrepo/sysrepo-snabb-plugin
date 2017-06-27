@@ -37,7 +37,7 @@
 int socket_send(ctx_t *ctx, char *message, sb_command_t command, char **response);
 int xpath_to_snabb(ctx_t *ctx, action_t *action, char **message);
 int sysrepo_to_snabb(ctx_t *ctx, action_t *action);
-int add_action(sr_val_t *val, sr_change_oper_t op);
+int add_action(ctx_t *ctx, sr_val_t *val, sr_change_oper_t op);
 void free_all_actions();
 void free_action(action_t *action);
 int apply_action(ctx_t *ctx, action_t *action);
@@ -167,6 +167,7 @@ int fill_list(sr_node_t *tree, char **message, int *len) {
 	if (NULL == tree) {
 		return rc;
 	}
+
 	while(true) {
 		if (*len < XPATH_MAX_LEN + (int) strlen(*message)) {
 			rc = double_message_size(message, len);
@@ -210,16 +211,29 @@ xpath_to_snabb(ctx_t *ctx, action_t *action, char **message) {
 	sr_node_t *trees = NULL;
 	long unsigned int tree_cnt = 0;
 	rc = sr_get_subtrees(ctx->sess, action->xpath, SR_GET_SUBTREE_DEFAULT, &trees, &tree_cnt);
+	if (SR_ERR_NOT_FOUND == rc) {
+		INF("No items found in sysrepo datastore for xpath: %s", action->xpath);
+		return SR_ERR_OK;
+	}
 	CHECK_RET(rc, error, "failed sr_get_subtrees: %s", sr_strerror(rc));
 
 	if (1 == tree_cnt) {
-		if (SR_LIST_T == trees[0].type) {
-			strcat(*message, " { ");
-		}
-		rc = fill_list(trees->first_child, message, &len);
-		CHECK_RET(rc, error, "failed to create snabb configuration data: %s", sr_strerror(rc));
-		if (SR_LIST_T == trees[0].type) {
-			strcat(*message, " } ");
+		if (true == list_or_container(trees[0].type)) {
+			if (SR_LIST_T == trees[0].type) {
+				strcat(*message, " { ");
+			}
+			rc = fill_list(trees->first_child, message, &len);
+			CHECK_RET(rc, error, "failed to create snabb configuration data: %s", sr_strerror(rc));
+			if (SR_LIST_T == trees[0].type) {
+				strcat(*message, " } ");
+			}
+		} else {
+			char *value = sr_val_to_str((sr_val_t *) &trees[0]);
+			strcat(*message, trees[0].name);
+			strcat(*message, " ");
+			strcat(*message, value);
+			strcat(*message, ";");
+			free(value);
 		}
 	} else {
 		for (int i = 0; i < (int) tree_cnt; i++) {
@@ -249,12 +263,12 @@ sysrepo_to_snabb(ctx_t *ctx, action_t *action) {
 	char *tmp = NULL;
 	char **value = &tmp;
 
-	rc = format_xpath(ctx, action);
-	CHECK_RET(rc, error, "failed to format xpath: %s", sr_strerror(rc));
-
 	/* translate sysrepo operation to snabb command */
 	switch(action->op) {
 	case SR_OP_MODIFIED:
+		rc = format_xpath(ctx, action);
+		CHECK_RET(rc, error, "failed to format xpath: %s", sr_strerror(rc));
+
 		message = malloc(sizeof(message) * (SNABB_MESSAGE_MAX + strlen(action->snabb_xpath) + strlen(ctx->yang_model)));
 		if (NULL == message) {
 			return SR_ERR_NOMEM;
@@ -265,9 +279,19 @@ sysrepo_to_snabb(ctx_t *ctx, action_t *action) {
 	case SR_OP_CREATED:
 		rc = xpath_to_snabb(ctx, action, value);
 		CHECK_RET(rc, error, "failed xpath_to_snabb: %s", sr_strerror(rc));
+		/* edge case, deleting all of leaf-list entries
+		 * check if value is empty string ""
+		 * and parent_type is LYS_LEAFLIST
+		 */
+		if (LYS_LEAFLIST == action->yang_type && 0 == strlen(*value)) {
+			action->yang_type = LYS_UNKNOWN;
+		}
+		rc = format_xpath(ctx, action);
+		CHECK_RET(rc, error, "failed to format xpath: %s", sr_strerror(rc));
 
 		int len = SNABB_MESSAGE_MAX + (int) strlen(action->snabb_xpath) + strlen(*value) + (int) strlen(ctx->yang_model);
 		message = malloc(sizeof(message) * len);
+
 		if (NULL == message) {
 			return SR_ERR_NOMEM;
 		}
@@ -280,6 +304,9 @@ sysrepo_to_snabb(ctx_t *ctx, action_t *action) {
 		command = SB_ADD;
 		break;
 	case SR_OP_DELETED:
+		rc = format_xpath(ctx, action);
+		CHECK_RET(rc, error, "failed to format xpath: %s", sr_strerror(rc));
+
 		message = malloc(sizeof(message) * (SNABB_MESSAGE_MAX + strlen(action->snabb_xpath) + strlen(ctx->yang_model)));
 		if (NULL == message) {
 			return SR_ERR_NOMEM;
@@ -304,14 +331,27 @@ error:
 }
 
 int
-add_action(sr_val_t *val, sr_change_oper_t op) {
+add_action(ctx_t *ctx, sr_val_t *val, sr_change_oper_t op) {
 	int rc = SR_ERR_OK;
 
 	action_t *action = malloc(sizeof(action_t));
+	action->xpath = strdup(val->xpath);
+	action->snabb_xpath = NULL;
+	action->value = NULL;
+	action->type = val->type;
+
+	rc = get_yang_type(ctx, action);
+	CHECK_RET(rc, error, "failed get_parent_typer %s", sr_strerror(rc));
+
+	/* leaf-list are handled diferently in snabb */
+	if (LYS_LEAFLIST == action->yang_type) {
+		op = SR_OP_CREATED;
+	}
+
 	if (!list_or_container(val->type) && !leaf_without_value(val->type) && SR_OP_MODIFIED == op) {
 		action->value = sr_val_to_str(val);
 		if (NULL == action->value) {
-			free(action);
+			free_action(action);
 			return SR_ERR_DATA_MISSING;
 		}
 	} else if (!list_or_container(val->type) && (SR_OP_CREATED == op || SR_OP_DELETED == op)) {
@@ -319,7 +359,7 @@ add_action(sr_val_t *val, sr_change_oper_t op) {
 		action_t *tmp;
 		LIST_FOREACH(tmp, &head, actions) {
 			if (0 == strncmp(val->xpath, tmp->xpath, strlen(tmp->xpath)) && list_or_container(tmp->type)) {
-				free(action);
+				free_action(action);
 				return rc;
 			}
 		}
@@ -336,21 +376,21 @@ add_action(sr_val_t *val, sr_change_oper_t op) {
 			}
 			tmp = tmp2;
 		}
-		action->value = NULL;
-	} else {
-		action->value = NULL;
 	}
-	action->xpath = strdup(val->xpath);
-	action->snabb_xpath = NULL;
 	action->op = op;
-	action->type = val->type;
 	LIST_INSERT_HEAD(&head, action, actions);
 
+	return rc;
+error:
+	free_action(action);
 	return rc;
 }
 
 void
 free_action(action_t *action) {
+	if (NULL == action) {
+		return;
+	}
 	if (NULL != action->value) {
 		free(action->value);
 	}
@@ -437,12 +477,21 @@ sysrepo_datastore_to_snabb(ctx_t *ctx) {
 			rc = SR_ERR_NOMEM;
 			goto error;
 		}
+
 		snprintf(xpath, XPATH_MAX_LEN, "/%s:%s", ctx->yang_model, trees[i].name);
 		action->value = NULL;
 		action->xpath = strdup(xpath);
 		action->snabb_xpath = NULL;
 		action->op = SR_OP_CREATED;
 		action->type = trees[i].type;
+
+		rc = get_yang_type(ctx, action);
+		if (SR_ERR_OK != rc) {
+			free_action(action);
+		}
+		CHECK_RET(rc, error, "failed get_parent_typer %s", sr_strerror(rc));
+
+
 		LIST_INSERT_HEAD(&head, action, actions);
 	}
 
