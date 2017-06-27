@@ -271,7 +271,7 @@ sysrepo_to_snabb(ctx_t *ctx, action_t *action) {
 	/* translate sysrepo operation to snabb command */
 	switch(action->op) {
 	case SR_OP_MODIFIED:
-		rc = format_xpath(ctx, action);
+		rc = format_xpath(action);
 		CHECK_RET(rc, error, "failed to format xpath: %s", sr_strerror(rc));
 
 		message = malloc(sizeof(message) * (SNABB_MESSAGE_MAX + strlen(action->snabb_xpath) + strlen(ctx->yang_model)));
@@ -290,7 +290,7 @@ sysrepo_to_snabb(ctx_t *ctx, action_t *action) {
 		if (LYS_LEAFLIST == action->yang_type && 0 == strlen(*value)) {
 			action->yang_type = LYS_UNKNOWN;
 		}
-		rc = format_xpath(ctx, action);
+		rc = format_xpath(action);
 		CHECK_RET(rc, error, "failed to format xpath: %s", sr_strerror(rc));
 
 		int len = SNABB_MESSAGE_MAX + (int) strlen(action->snabb_xpath) + strlen(*value) + (int) strlen(ctx->yang_model);
@@ -306,7 +306,7 @@ sysrepo_to_snabb(ctx_t *ctx, action_t *action) {
 		command = SB_ADD;
 		break;
 	case SR_OP_DELETED:
-		rc = format_xpath(ctx, action);
+		rc = format_xpath(action);
 		CHECK_RET(rc, error, "failed to format xpath: %s", sr_strerror(rc));
 
 		message = malloc(sizeof(message) * (SNABB_MESSAGE_MAX + strlen(action->snabb_xpath) + strlen(ctx->yang_model)));
@@ -357,7 +357,7 @@ add_action(ctx_t *ctx, sr_val_t *val, sr_change_oper_t op) {
 		}
 	} else if (!list_or_container(val->type) && (SR_OP_CREATED == op || SR_OP_DELETED == op)) {
 		/* check if a list/container is already in the list */
-		action_t *tmp;
+		action_t *tmp = NULL;
 		LIST_FOREACH(tmp, &head, actions) {
 			if (0 == strncmp(val->xpath, tmp->xpath, strlen(tmp->xpath)) && list_or_container(tmp->type)) {
 				free_action(action);
@@ -367,7 +367,7 @@ add_action(ctx_t *ctx, sr_val_t *val, sr_change_oper_t op) {
 		action->value = NULL;
 	} else if (list_or_container(val->type) && (SR_OP_CREATED == op || SR_OP_DELETED == op)) {
 		/* if a list/container is created/deleted remove previous entries of child nodes */
-		action_t *tmp, *tmp2;
+		action_t *tmp = NULL, *tmp2 = NULL;
 		tmp = LIST_FIRST(&head);
 		while (NULL != tmp) {
 			tmp2 = LIST_NEXT(tmp, actions);
@@ -418,7 +418,8 @@ free_all_actions() {
 int
 apply_all_actions(ctx_t *ctx) {
 	int rc = SR_ERR_OK;
-	action_t *tmp;
+	action_t *tmp = NULL;
+
 	LIST_FOREACH(tmp, &head, actions) {
 		rc = apply_action(ctx, tmp);
 		CHECK_RET(rc, rollback, "failed apply action: %s", sr_strerror(rc));
@@ -518,7 +519,7 @@ error:
 
 int
 libyang_data_to_sysrepo(sr_session_ctx_t *session, struct lyd_node *root) {
-	const struct lyd_node *node, *next;
+	const struct lyd_node *node = NULL, *next = NULL;
 	char *xpath = NULL;
 	int rc = SR_ERR_OK;
 
@@ -795,7 +796,7 @@ snabb_state_data_to_sysrepo(ctx_t *ctx, char *xpath, sr_val_t **values, size_t *
 	action->snabb_xpath = NULL;
 	action->value = NULL;
 
-	rc = format_xpath(ctx, action);
+	rc = format_xpath(action);
 	CHECK_RET(rc, error, "failed to format xpath: %s", sr_strerror(rc));
 
 	snprintf(message, SNABB_MESSAGE_MAX, "get-state {path '%s'; schema %s;}", action->snabb_xpath, ctx->yang_model);
@@ -812,7 +813,7 @@ snabb_state_data_to_sysrepo(ctx_t *ctx, char *xpath, sr_val_t **values, size_t *
 	rc = transform_data_to_array(ctx, xpath, response, &root);
 	CHECK_RET(rc, error, "failed parse snabb data in libyang: %s", sr_strerror(rc));
 
-	const struct lyd_node *node, *next;
+	const struct lyd_node *node = NULL, *next = NULL;
 	LY_TREE_DFS_BEGIN(root, next, node) {
 		if (LYS_LEAF == node->schema->nodetype || LYS_LEAFLIST == node->schema->nodetype) {
 			cnt++;

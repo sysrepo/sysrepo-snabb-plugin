@@ -79,7 +79,7 @@ leaf_without_value(sr_type_t type) {
  * 3) remove key's from the last node for set/add operation
  */
 int
-format_xpath(ctx_t *ctx, action_t *action) {
+format_xpath(action_t *action) {
 	char *xpath = NULL, *node = NULL, *tmp = NULL;
 	sr_xpath_ctx_t state = {0,0,0,0};
 	int rc = SR_ERR_OK;
@@ -158,11 +158,11 @@ error:
 }
 
 void add_default_nodes(ctx_t *ctx, struct lyd_node *root) {
-    const struct lyd_node *node, *next;
+    const struct lyd_node *node = NULL, *next = NULL;
 
 	LY_TREE_DFS_BEGIN(root, next, node) {
 		if (LYS_LIST == node->schema->nodetype || LYS_CONTAINER == node->schema->nodetype) {
-			struct lys_node *next, *elem;
+			struct lys_node *next = NULL, *elem = NULL;
 			LY_TREE_FOR_SAFE(node->schema->child, next, elem) {
 				if (elem->nodetype == LYS_LEAF || elem->nodetype == LYS_LEAFLIST) {
 					struct lys_node_leaf *leaf = (struct lys_node_leaf *) elem;
@@ -170,7 +170,7 @@ void add_default_nodes(ctx_t *ctx, struct lyd_node *root) {
 					 * if not add a data node with default value
 					 */
 					if (NULL != leaf->dflt) {
-						struct lyd_node *lyd_next, *lyd_elem;
+						struct lyd_node *lyd_next = NULL, *lyd_elem = NULL;
 						bool found = false;
 						LY_TREE_FOR_SAFE(node->child, lyd_next, lyd_elem) {
 							if (0 == strncmp(lyd_elem->schema->name, leaf->name, strlen(leaf->name))) {
