@@ -78,8 +78,10 @@ error:
 }
 
 int socket_send(ctx_t *ctx, char *message, sb_command_t command, char **response) {
+	int rc = SR_ERR_OK;
 	int len = 0;
 	int nbytes;
+	char *buffer = NULL;
 
 	if (NULL == message) {
 		return SR_ERR_INTERNAL;
@@ -91,10 +93,8 @@ int socket_send(ctx_t *ctx, char *message, sb_command_t command, char **response
 
 	len = (int) strlen(&str[0]) + 1 + (int) strlen(message) + 1;
 
-	char *buffer = malloc(sizeof(buffer) * len);
-	if (NULL == buffer) {
-		return SR_ERR_NOMEM;
-	}
+	buffer = malloc(sizeof(buffer) * len);
+	CHECK_NULL_MSG(buffer, &rc, error, "failed to allocate memory");
 
 	nbytes = snprintf(buffer, len, "%s\n%s", str, message);
 
@@ -102,10 +102,11 @@ int socket_send(ctx_t *ctx, char *message, sb_command_t command, char **response
 	nbytes = write(ctx->socket_fd, buffer, nbytes);
 	if ((int) strlen(buffer) != (int) nbytes) {
 		ERR("Failed to write full messaget o server: written %d, expected %d", (int) nbytes, (int) strlen(buffer));
-		free(buffer);
-		return SR_ERR_INTERNAL;
+		rc = SR_ERR_INTERNAL;
+		goto error;
 	}
 	free(buffer);
+	buffer = NULL;
 
 	nbytes = read(ctx->socket_fd, ch, SNABB_SOCKET_MAX);
 	ch[nbytes] = 0;
@@ -141,9 +142,14 @@ int socket_send(ctx_t *ctx, char *message, sb_command_t command, char **response
 
 	return SR_ERR_OK;
 failed:
+	rc = SR_ERR_INTERNAL;
 	WRN("Operation faild for:\n%s", message);
 	WRN("Respons:\n%s", ch);
-	return SR_ERR_INTERNAL;
+error:
+	if (NULL != buffer) {
+		free(buffer);
+	}
+	return rc;
 }
 
 int double_message_size(char **message, int *len) {
@@ -152,12 +158,11 @@ int double_message_size(char **message, int *len) {
 
 	*len = *len * 2;
 	tmp = (char *) realloc(*message, (*len));
-	if (NULL == tmp) {
-		return SR_ERR_NOMEM;
-	}
+	CHECK_NULL_MSG(tmp, &rc, error, "failed to allocate memory");
 
 	*message = tmp;
 
+error:
 	return rc;
 }
 
@@ -202,13 +207,13 @@ int
 xpath_to_snabb(ctx_t *ctx, action_t *action, char **message) {
 	int rc = SR_ERR_OK;
 	int len = SNABB_MESSAGE_MAX;
+	sr_node_t *trees = NULL;
+
 	*message = malloc(sizeof(*message) * len);
-	if (NULL == *message) {
-		return SR_ERR_NOMEM;
-	}
+	CHECK_NULL_MSG(*message, &rc, error, "failed to allocate memory");
+
 	*message[0] = '\0';
 
-	sr_node_t *trees = NULL;
 	long unsigned int tree_cnt = 0;
 	rc = sr_get_subtrees(ctx->sess, action->xpath, SR_GET_SUBTREE_DEFAULT, &trees, &tree_cnt);
 	if (SR_ERR_NOT_FOUND == rc) {
@@ -270,9 +275,8 @@ sysrepo_to_snabb(ctx_t *ctx, action_t *action) {
 		CHECK_RET(rc, error, "failed to format xpath: %s", sr_strerror(rc));
 
 		message = malloc(sizeof(message) * (SNABB_MESSAGE_MAX + strlen(action->snabb_xpath) + strlen(ctx->yang_model)));
-		if (NULL == message) {
-			return SR_ERR_NOMEM;
-		}
+		CHECK_NULL_MSG(message, &rc, error, "failed to allocate memory");
+
 		snprintf(message, SNABB_MESSAGE_MAX, "set-config {path '%s'; config '%s'; schema %s;}", action->snabb_xpath, action->value, ctx->yang_model);
 		command = SB_SET;
 		break;
@@ -291,10 +295,8 @@ sysrepo_to_snabb(ctx_t *ctx, action_t *action) {
 
 		int len = SNABB_MESSAGE_MAX + (int) strlen(action->snabb_xpath) + strlen(*value) + (int) strlen(ctx->yang_model);
 		message = malloc(sizeof(message) * len);
+		CHECK_NULL_MSG(message, &rc, error, "failed to allocate memory");
 
-		if (NULL == message) {
-			return SR_ERR_NOMEM;
-		}
 		if (action->type == SR_LIST_T) {
 			snprintf(message, len, "add-config {path '%s'; config '%s'; schema %s;}", action->snabb_xpath, *value, ctx->yang_model);
 		} else {
@@ -308,9 +310,8 @@ sysrepo_to_snabb(ctx_t *ctx, action_t *action) {
 		CHECK_RET(rc, error, "failed to format xpath: %s", sr_strerror(rc));
 
 		message = malloc(sizeof(message) * (SNABB_MESSAGE_MAX + strlen(action->snabb_xpath) + strlen(ctx->yang_model)));
-		if (NULL == message) {
-			return SR_ERR_NOMEM;
-		}
+		CHECK_NULL_MSG(message, &rc, error, "failed to allocate memory");
+
 		snprintf(message, SNABB_MESSAGE_MAX, "remove-config {path '%s'; schema %s;}", action->snabb_xpath, ctx->yang_model);
 		command = SB_REMOVE;
 		break;
@@ -473,10 +474,7 @@ sysrepo_datastore_to_snabb(ctx_t *ctx) {
 
 	for (int i = 0; i < (int) tree_cnt; i++) {
 		action = malloc(sizeof(action_t));
-		if (NULL == action) {
-			rc = SR_ERR_NOMEM;
-			goto error;
-		}
+		CHECK_NULL_MSG(action, &rc, error, "failed to allocate memory");
 
 		snprintf(xpath, XPATH_MAX_LEN, "/%s:%s", ctx->yang_model, trees[i].name);
 		action->value = NULL;
@@ -539,10 +537,8 @@ libyang_data_to_sysrepo(sr_session_ctx_t *session, struct lyd_node *root) {
 			}
 			if (!skip) {
 				xpath = lyd_path(node);
-				if (NULL == xpath) {
-					rc = SR_ERR_NOMEM;
-					goto error;
-				}
+				CHECK_NULL_MSG(xpath, &rc, error, "failed to allocate memory");
+
 				rc = sr_set_item_str(session, xpath, leaf->value_str, SR_EDIT_DEFAULT);
 				CHECK_RET(rc, error, "failed sr_set_item_str: %s", sr_strerror(rc));
 				free(xpath);
@@ -793,10 +789,8 @@ snabb_state_data_to_sysrepo(ctx_t *ctx, char *xpath, sr_val_t **values, size_t *
 	int cnt = 0;
 
 	action = malloc(sizeof(action_t));
-	if (NULL == action) {
-		rc = SR_ERR_NOMEM;
-		goto error;
-	}
+	CHECK_NULL_MSG(action, &rc, error, "failed to allocate memory");
+
 	action->xpath = strdup(xpath);
 	action->snabb_xpath = NULL;
 	action->value = NULL;
@@ -836,10 +830,8 @@ snabb_state_data_to_sysrepo(ctx_t *ctx, char *xpath, sr_val_t **values, size_t *
 			struct lyd_node_leaf_list *leaf = (struct lyd_node_leaf_list *) node;
 			struct lys_node_leaf *lys_leaf = (struct lys_node_leaf *) node->schema;
 			char *path = lyd_path(node);
-			if (NULL == path) {
-				rc = SR_ERR_NOMEM;
-				goto error;
-			}
+			CHECK_NULL_MSG(path, &rc, error, "failed to allocate memory");
+
 			rc = sr_val_set_xpath(&v[i], path);
 			free(path);
 			CHECK_RET(rc, error, "failed sr_val_set_xpath: %s", sr_strerror(rc));

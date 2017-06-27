@@ -86,17 +86,11 @@ format_xpath(ctx_t *ctx, action_t *action) {
 
 	/* snabb xpath is always smaller than sysrepo's xpath */
 	xpath = malloc(sizeof(xpath) * strlen(action->xpath));
-	if (NULL == xpath) {
-		rc = SR_ERR_NOMEM;
-		goto error;
-	}
+	CHECK_NULL_MSG(xpath, &rc, error, "failed to allocate memory");
 	strcpy(xpath, "");
 
 	tmp = malloc(sizeof(tmp) * strlen(action->xpath));
-	if (NULL == tmp) {
-		rc = SR_ERR_NOMEM;
-		goto error;
-	}
+	CHECK_NULL_MSG(tmp, &rc, error, "failed to allocate memory");
 
 	node = sr_xpath_next_node(action->xpath, &state);
 	if (NULL == node) {
