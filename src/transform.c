@@ -217,7 +217,7 @@ xpath_to_snabb(ctx_t *ctx, action_t *action, char **message) {
 
 	long unsigned int tree_cnt = 0;
 	rc = sr_get_subtrees(ctx->sess, action->xpath, SR_GET_SUBTREE_DEFAULT, &trees, &tree_cnt);
-	if (SR_ERR_NOT_FOUND == rc) {
+	if (SR_ERR_NOT_FOUND == rc && SR_EV_ABORT == action->event) {
 		INF("No items found in sysrepo datastore for xpath: %s", action->xpath);
 		return SR_ERR_OK;
 	}
