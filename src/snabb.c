@@ -150,10 +150,6 @@ module_change_cb(sr_session_ctx_t *session, const char *module_name, sr_notif_ev
 	INF("%s configuration has changed.", ctx->yang_model);
 
 	ctx->sess = session;
-	if (true == ctx->skip) {
-		ctx->skip = false;
-		return rc;
-	}
 
 	if (SR_EV_APPLY == event) {
 		/* copy running datastore to startup */
@@ -204,7 +200,6 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
 	ctx->sess = session;
 	ctx->running_sess = session;
 	ctx->socket_fd = -1;
-	ctx->skip = false;
 
 	snprintf(xpath, XPATH_MAX_LEN, "/%s:softwire-state", ctx->yang_model);
 
@@ -214,11 +209,6 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
 
 	ctx->pid = pid;
 	INF("snabb pid is %d", pid);
-
-	rc = sr_module_change_subscribe(session, ctx->yang_model, module_change_cb, ctx, 0, SR_SUBSCR_CTX_REUSE, &ctx->sub);
-	CHECK_RET(rc, error, "failed sr_module_change_subscribe: %s", sr_strerror(rc));
-
-	INF("%s plugin initialized successfully", ctx->yang_model);
 
 	/* set subscription as our private context */
 	*private_ctx = ctx;
@@ -245,8 +235,13 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
 	rc = sync_datastores(ctx);
 	CHECK_RET(rc, error, "failed to apply sysrepo startup data to snabb: %s", sr_strerror(rc));
 
+	rc = sr_module_change_subscribe(session, ctx->yang_model, module_change_cb, ctx, 0, SR_SUBSCR_CTX_REUSE, &ctx->sub);
+	CHECK_RET(rc, error, "failed sr_module_change_subscribe: %s", sr_strerror(rc));
+
 	rc = sr_dp_get_items_subscribe(session, xpath, state_data_cb, ctx, SR_SUBSCR_CTX_REUSE, &ctx->sub);
 	CHECK_RET(rc, error, "failed sr_dp_get_items_subscribe: %s", sr_strerror(rc));
+
+	INF("%s plugin initialized successfully", ctx->yang_model);
 
 	return SR_ERR_OK;
 

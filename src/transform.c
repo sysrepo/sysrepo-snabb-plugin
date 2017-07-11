@@ -451,23 +451,13 @@ int
 sysrepo_datastore_to_snabb(ctx_t *ctx) {
 	action_t *action = NULL;
 	sr_node_t *trees = NULL;
-	sr_conn_ctx_t *connection = NULL;
-	sr_session_ctx_t *session = NULL;
+	/* use startup session */
+	sr_session_ctx_t *session = ctx->startup_sess;
 
 	int rc = SR_ERR_OK;
 	char xpath[XPATH_MAX_LEN] = {0};
 
 	snprintf(xpath, XPATH_MAX_LEN, "/%s:*", ctx->yang_model);
-
-	/* connect to sysrepo */
-	rc = sr_connect(ctx->yang_model, SR_CONN_DEFAULT, &connection);
-	CHECK_RET(rc, error, "failed sr_connect: %s", sr_strerror(rc));
-
-	/* start session
-	 * we need to create a new seassion because we need only the configuration data
-	 * */
-	rc = sr_session_start(connection, SR_DS_STARTUP, SR_SESS_CONFIG_ONLY, &session);
-	CHECK_RET(rc, error, "failed sr_session_start: %s", sr_strerror(rc));
 
 	long unsigned int tree_cnt = 0;
 	rc = sr_get_subtrees(session, xpath, SR_GET_SUBTREE_DEFAULT, &trees, &tree_cnt);
@@ -499,19 +489,13 @@ sysrepo_datastore_to_snabb(ctx_t *ctx) {
 	//	INF("Add liste entry: xpath: %s, value: %s, op: %d", tmp->xpath, tmp->value, tmp->op);
 	//}
 
-	ctx->sess = ctx->running_sess;
+	ctx->sess = session;
 	rc = apply_all_actions(ctx);
 	CHECK_RET(rc, error, "failed execute all operations: %s", sr_strerror(rc));
 
 error:
 	if (NULL != trees) {
 		sr_free_trees(trees, tree_cnt);
-	}
-	if (NULL != session) {
-		sr_session_stop(session);
-	}
-	if (NULL != connection) {
-		sr_disconnect(connection);
 	}
 
 	return rc;
@@ -548,6 +532,7 @@ libyang_data_to_sysrepo(sr_session_ctx_t *session, struct lyd_node *root) {
 		LY_TREE_DFS_END(root, next, node);
 	}
 
+	INF_MSG("commit the changes");
 	rc = sr_commit(session);
 	CHECK_RET(rc, error, "failed sr_commit: %s", sr_strerror(rc));
 
@@ -580,12 +565,14 @@ snabb_datastore_to_sysrepo(ctx_t *ctx) {
 	CHECK_RET(rc, error, "failed parse snabb data in libyang: %s", sr_strerror(rc));
 
 	/* copy snabb daat to startup datastore */
+	INF_MSG("appply snabb data to sysrepo startup datastore");
 	rc = libyang_data_to_sysrepo(ctx->startup_sess, node);
-	CHECK_RET(rc, error, "failed to apply libyang daat to sysrepo: %s", sr_strerror(rc));
+	CHECK_RET(rc, error, "failed to apply libyang data to sysrepo: %s", sr_strerror(rc));
 
-	/* copy snabb daat to startup datastore */
-	rc = libyang_data_to_sysrepo(ctx->sess, node);
-	CHECK_RET(rc, error, "failed to apply libyang daat to sysrepo: %s", sr_strerror(rc));
+	///* copy snabb daat to startup datastore */
+	//INF_MSG("appply snabb data to sysrepo running datastore");
+	//rc = libyang_data_to_sysrepo(ctx->sess, node);
+	//CHECK_RET(rc, error, "failed to apply libyang data to sysrepo: %s", sr_strerror(rc));
 
 	/* free lyd_node */
 	if (NULL != node) {
@@ -621,7 +608,6 @@ sync_datastores(ctx_t *ctx) {
 		/* TODO make this more robust
 		 * create a list with executed xpath's
 		 */
-		ctx->skip = true;
 		rc = snabb_datastore_to_sysrepo(ctx);
 		CHECK_RET(rc, error, "failed to apply snabb data to sysrepo: %s", sr_strerror(rc));
 	} else {
