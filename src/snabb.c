@@ -36,7 +36,7 @@
 const char *YANG_MODEL = "snabb-softwire-v2";
 
 static int
-apply_change(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t *new_val) {
+apply_change(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t *new_val, sr_notif_event_t event) {
 	int rc = SR_ERR_OK;
 
 	switch(op) {
@@ -44,7 +44,7 @@ apply_change(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t *new_v
 		if (NULL != new_val) {
 			printf("CREATED: ");
 			sr_print_val(new_val);
-			rc = add_action(ctx, new_val, op);
+			rc = add_action(ctx, new_val, op, event);
 			CHECK_RET(rc, error, "failed to add operation: %s", sr_strerror(rc));
 		}
 		break;
@@ -52,7 +52,7 @@ apply_change(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t *new_v
 		if (NULL != old_val) {
 			printf("DELETED: ");
 			sr_print_val(old_val);
-			rc = add_action(ctx, old_val, op);
+			rc = add_action(ctx, old_val, op, event);
 			CHECK_RET(rc, error, "failed to add operation: %s", sr_strerror(rc));
 		}
 	break;
@@ -62,7 +62,7 @@ apply_change(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t *new_v
 			printf("old value ");
 			sr_print_val(old_val);
 			printf("new value ");
-			rc = add_action(ctx, new_val, op);
+			rc = add_action(ctx, new_val, op, event);
 			CHECK_RET(rc, error, "failed to add operation: %s", sr_strerror(rc));
 		}
 	break;
@@ -104,7 +104,7 @@ get_snabb_pid(const char *fmt, void *ptr) {
 }
 
 static int
-parse_config(sr_session_ctx_t *session, const char *module_name, ctx_t *ctx) {
+parse_config(sr_session_ctx_t *session, const char *module_name, ctx_t *ctx, sr_notif_event_t event) {
 	sr_change_iter_t *it = NULL;
 	int rc = SR_ERR_OK;
 	sr_change_oper_t oper;
@@ -121,7 +121,7 @@ parse_config(sr_session_ctx_t *session, const char *module_name, ctx_t *ctx) {
 	}
 
 	while (SR_ERR_OK == (rc = sr_get_change_next(session, it, &oper, &old_value, &new_value))) {
-		rc = apply_change(ctx, oper, old_value, new_value);
+		rc = apply_change(ctx, oper, old_value, new_value, event);
 		sr_free_val(old_value);
 		sr_free_val(new_value);
 		CHECK_RET(rc, error, "failed to add operation: %s", sr_strerror(rc));
@@ -165,7 +165,7 @@ module_change_cb(sr_session_ctx_t *session, const char *module_name, sr_notif_ev
 		return SR_ERR_OK;
 	}
 
-	rc = parse_config(session, module_name, ctx);
+	rc = parse_config(session, module_name, ctx, event);
 	CHECK_RET(rc, error, "failed to apply sysrepo changes to snabb: %s", sr_strerror(rc));
 
 error:

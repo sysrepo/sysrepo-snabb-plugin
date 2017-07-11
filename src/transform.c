@@ -34,10 +34,9 @@
 #include "xpath.h"
 #include "transform.h"
 
-int socket_send(ctx_t *ctx, char *message, sb_command_t command, char **response);
+int socket_send(ctx_t *ctx, char *message, sb_command_t command, char **response, sr_notif_event_t event);
 int xpath_to_snabb(ctx_t *ctx, action_t *action, char **message);
 int sysrepo_to_snabb(ctx_t *ctx, action_t *action);
-int add_action(ctx_t *ctx, sr_val_t *val, sr_change_oper_t op);
 void free_all_actions();
 void free_action(action_t *action);
 int apply_action(ctx_t *ctx, action_t *action);
@@ -77,7 +76,7 @@ error:
 	return SR_ERR_INTERNAL;
 }
 
-int socket_send(ctx_t *ctx, char *message, sb_command_t command, char **response) {
+int socket_send(ctx_t *ctx, char *message, sb_command_t command, char **response, sr_notif_event_t event) {
 	int rc = SR_ERR_OK;
 	int len = 0;
 	int nbytes;
@@ -142,9 +141,11 @@ int socket_send(ctx_t *ctx, char *message, sb_command_t command, char **response
 
 	return SR_ERR_OK;
 failed:
-	rc = SR_ERR_INTERNAL;
-	WRN("Operation faild for:\n%s", message);
-	WRN("Respons:\n%s", ch);
+	if (SR_EV_ABORT != event) {
+		rc = SR_ERR_INTERNAL;
+		WRN("Operation faild for:\n%s", message);
+		WRN("Respons:\n%s", ch);
+	}
 error:
 	if (NULL != buffer) {
 		free(buffer);
@@ -321,7 +322,7 @@ sysrepo_to_snabb(ctx_t *ctx, action_t *action) {
 
 	/* send to socket */
 	INF_MSG("send to socket");
-	rc = socket_send(ctx, message, command, NULL);
+	rc = socket_send(ctx, message, command, NULL, action->event);
 	CHECK_RET(rc, error, "failed to send message to snabb socket: %s", sr_strerror(rc));
 
 error:
@@ -332,7 +333,7 @@ error:
 }
 
 int
-add_action(ctx_t *ctx, sr_val_t *val, sr_change_oper_t op) {
+add_action(ctx_t *ctx, sr_val_t *val, sr_change_oper_t op, sr_notif_event_t event) {
 	int rc = SR_ERR_OK;
 
 	action_t *action = malloc(sizeof(action_t));
@@ -340,6 +341,7 @@ add_action(ctx_t *ctx, sr_val_t *val, sr_change_oper_t op) {
 	action->snabb_xpath = NULL;
 	action->value = NULL;
 	action->type = val->type;
+	action->event = event;
 
 	rc = get_yang_type(ctx, action);
 	CHECK_RET(rc, error, "failed get_parent_typer %s", sr_strerror(rc));
@@ -431,7 +433,7 @@ apply_all_actions(ctx_t *ctx) {
 	LIST_FOREACH(tmp, &head, actions) {
 		if (SR_OP_DELETED == tmp->op) {
 			rc = apply_action(ctx, tmp);
-			CHECK_RET(rc, rollback, "failed apply action: %s", sr_strerror(rc));
+			CHECK_RET(rc, cleanup, "failed apply action: %s", sr_strerror(rc));
 		}
 	}
 
@@ -439,7 +441,7 @@ apply_all_actions(ctx_t *ctx) {
 	LIST_FOREACH(tmp, &head, actions) {
 		if (SR_OP_DELETED != tmp->op) {
 			rc = apply_action(ctx, tmp);
-			CHECK_RET(rc, rollback, "failed apply action: %s", sr_strerror(rc));
+			CHECK_RET(rc, cleanup, "failed apply action: %s", sr_strerror(rc));
 		}
 	}
 
@@ -447,8 +449,7 @@ apply_all_actions(ctx_t *ctx) {
 	free_all_actions();
 	return rc;
 
-rollback:
-	//TODO do a rollback
+cleanup:
 	free_all_actions();
 	return rc;
 }
@@ -459,8 +460,6 @@ apply_action(ctx_t *ctx, action_t *action) {
 
 	rc = sysrepo_to_snabb(ctx, action);
 	CHECK_RET(rc, error, "failed to create snabb message: %s", sr_strerror(rc));
-
-	//TODO create revrse list for rollback
 
 error:
 	return rc;
@@ -492,6 +491,7 @@ sysrepo_datastore_to_snabb(ctx_t *ctx) {
 		action->snabb_xpath = NULL;
 		action->op = SR_OP_CREATED;
 		action->type = trees[i].type;
+		action->event = SR_EV_APPLY;
 
 		rc = get_yang_type(ctx, action);
 		if (SR_ERR_OK != rc) {
@@ -577,7 +577,7 @@ snabb_datastore_to_sysrepo(ctx_t *ctx) {
 	INF("%s", message);
 	/* send to socket */
 	INF_MSG("send to socket");
-	rc = socket_send(ctx, message, command, &response);
+	rc = socket_send(ctx, message, command, &response, SR_EV_APPLY);
 	CHECK_RET(rc, error, "failed to send message to snabb socket: %s", sr_strerror(rc));
 
 	rc = transform_data_to_array(ctx, NULL, response, &node);
@@ -800,6 +800,7 @@ snabb_state_data_to_sysrepo(ctx_t *ctx, char *xpath, sr_val_t **values, size_t *
 	action->xpath = strdup(xpath);
 	action->snabb_xpath = NULL;
 	action->value = NULL;
+	action->event = SR_EV_APPLY;
 
 	rc = format_xpath(action);
 	CHECK_RET(rc, error, "failed to format xpath: %s", sr_strerror(rc));
@@ -812,7 +813,7 @@ snabb_state_data_to_sysrepo(ctx_t *ctx, char *xpath, sr_val_t **values, size_t *
 	INF("%s", message);
 	/* send to socket */
 	INF_MSG("send to socket");
-	rc = socket_send(ctx, message, command, &response);
+	rc = socket_send(ctx, message, command, &response, SR_EV_APPLY);
 	CHECK_RET(rc, error, "failed to send message to snabb socket: %s", sr_strerror(rc));
 
 	rc = transform_data_to_array(ctx, xpath, response, &root);

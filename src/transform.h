@@ -63,6 +63,7 @@ typedef struct action_s {
 	sr_type_t type;
 	LYS_NODE yang_type;
 	sr_change_oper_t op;
+	sr_notif_event_t event;
 	LIST_ENTRY(action_s) actions;
 } action_t;
 LIST_HEAD(listhead, action_s) head;
@@ -75,7 +76,7 @@ void socket_close(ctx_t *ctx);
 
 int snabb_state_data_to_sysrepo(ctx_t *ctx, char *xpath, sr_val_t **values, size_t *values_cnt);
 
-int add_action(ctx_t *ctx, sr_val_t *val, sr_change_oper_t op);
+int add_action(ctx_t *ctx, sr_val_t *val, sr_change_oper_t op, sr_notif_event_t event);
 int apply_all_actions(ctx_t *ctx);
 
 int sync_datastores(ctx_t *ctx);
