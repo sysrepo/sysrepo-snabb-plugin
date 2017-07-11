@@ -33,7 +33,7 @@
 
 #define BUFSIZE 256
 
-const char *YANG_MODEL = "snabb-softwire-v1";
+const char *YANG_MODEL = "snabb-softwire-v2";
 
 static int
 apply_change(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t *new_val) {

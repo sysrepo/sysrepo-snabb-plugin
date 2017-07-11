@@ -51,12 +51,6 @@ if (NOT SYSREPOCTL_EXECUTABLE)
     message(FATAL_ERROR "Unable to find sysrepoctl, set SYSREPOCTL_EXECUTABLE manually.")
 endif()
 
-execute_process(COMMAND ${SYSREPOCTL_EXECUTABLE} -i -g ${CMAKE_SOURCE_DIR}/yang/snabb-softwire-v1.yang -o root:root -p 666 RESULT_VARIABLE RET OUTPUT_VARIABLE OUT ERROR_VARIABLE OUT)
-if (RET)
-	string(REPLACE \"\\n\" \"\\n  \" OUT \${OUT})
-	message(FATAL_ERROR \"  Command sysrepoctl list failed:\n  \${OUT}\")
-endif()
-
 if (PLUGIN)
 	install(TARGETS ${CMAKE_PROJECT_NAME} DESTINATION ${SR_PLUGINS_DIR})
 else()
