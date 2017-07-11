@@ -1,0 +1,17 @@
+[Unit]
+Description=Sysrepo Snabb plugin
+After=sysrepod.service lwaftr.service
+Requires=sysrepod.service lwaftr.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/sysrepo-snabb-plugin
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=yes
+ProtectHome=yes
+SystemCallArchitectures=native
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
