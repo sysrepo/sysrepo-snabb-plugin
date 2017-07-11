@@ -366,8 +366,15 @@ add_action(ctx_t *ctx, sr_val_t *val, sr_change_oper_t op) {
 		}
 		action->value = NULL;
 	} else if (list_or_container(val->type) && (SR_OP_CREATED == op || SR_OP_DELETED == op)) {
-		/* if a list/container is created/deleted remove previous entries of child nodes */
 		action_t *tmp = NULL, *tmp2 = NULL;
+		/* check of contaire/group is covered with some other xpathg */
+		LIST_FOREACH(tmp, &head, actions) {
+			if (0 == strncmp(val->xpath, tmp->xpath, strlen(tmp->xpath)) && list_or_container(tmp->type)) {
+				free_action(action);
+				return rc;
+			}
+		}
+		/* if a list/container is created/deleted remove previous entries of child nodes */
 		tmp = LIST_FIRST(&head);
 		while (NULL != tmp) {
 			tmp2 = LIST_NEXT(tmp, actions);
@@ -420,10 +427,22 @@ apply_all_actions(ctx_t *ctx) {
 	int rc = SR_ERR_OK;
 	action_t *tmp = NULL;
 
+	/* first apply all delete actions */
 	LIST_FOREACH(tmp, &head, actions) {
-		rc = apply_action(ctx, tmp);
-		CHECK_RET(rc, rollback, "failed apply action: %s", sr_strerror(rc));
+		if (SR_OP_DELETED == tmp->op) {
+			rc = apply_action(ctx, tmp);
+			CHECK_RET(rc, rollback, "failed apply action: %s", sr_strerror(rc));
+		}
 	}
+
+	/* first apply all add/change actions */
+	LIST_FOREACH(tmp, &head, actions) {
+		if (SR_OP_DELETED != tmp->op) {
+			rc = apply_action(ctx, tmp);
+			CHECK_RET(rc, rollback, "failed apply action: %s", sr_strerror(rc));
+		}
+	}
+
 
 	free_all_actions();
 	return rc;
