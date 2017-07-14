@@ -5,6 +5,7 @@ set(CMAKE_C_FLAGS         "${CMAKE_C_FLAGS} -Wall -Wpedantic -std=gnu11")
 set(CMAKE_C_FLAGS_RELEASE "-DNDEBUG -O2")
 set(CMAKE_C_FLAGS_DEBUG   "-g -O0")
 
+set(YANG_MODEL "snabb-softwire-v1" CACHE STRING "YANG model to use.")
 set(PLUGIN 0 CACHE BOOL "Build a plugin.")
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/CMakeModules/")
@@ -14,6 +15,8 @@ set(SOURCES
 	src/xpath.c
 	src/parse.c
 	src/transform.c)
+
+CONFIGURE_FILE("${PROJECT_SOURCE_DIR}/src/config.h.in" "${PROJECT_SOURCE_DIR}/src/config.h" ESCAPE_QUOTES @ONLY)
 
 if (PLUGIN)
 	add_library(${CMAKE_PROJECT_NAME} MODULE ${SOURCES})

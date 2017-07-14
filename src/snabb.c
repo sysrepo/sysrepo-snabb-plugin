@@ -26,6 +26,7 @@
 #include <sysrepo/values.h>
 #include <sysrepo/plugins.h>
 
+#include "config.h"
 #include "snabb.h"
 #include "parse.h"
 #include "common.h"
@@ -33,7 +34,7 @@
 
 #define BUFSIZE 256
 
-const char *YANG_MODEL = "snabb-softwire-v2";
+const char *YANG_MODEL = YANG;
 
 static int
 apply_change(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t *new_val, sr_notif_event_t event) {
