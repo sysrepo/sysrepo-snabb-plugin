@@ -219,7 +219,6 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
 	CHECK_RET(rc, error, "failed socket_connect: %s", sr_strerror(rc));
 
 	/* initialize action list */
-	LIST_HEAD(listhead, action_s) head;
 	LIST_INIT(&head);
 
 	/* parse the yang model */

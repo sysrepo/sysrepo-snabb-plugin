@@ -42,6 +42,12 @@ typedef enum sb_command_e {
     SB_REMOVE,    /* remove a component from a configuration, for example removing a routing table entry */
 } sb_command_t;
 
+typedef enum status_e {
+	CREATED = 0, /* an action is created */
+	EXECUTED, /* action is executed by snabb */
+	APPLIED, /* action is successfully executed by snabb */
+} status_t;
+
 typedef struct ctx_s {
 	const char *yang_model;
     struct ly_ctx *libyang_ctx;
@@ -64,9 +70,12 @@ typedef struct action_s {
 	LYS_NODE yang_type;
 	sr_change_oper_t op;
 	sr_notif_event_t event;
+	status_t status;
 	LIST_ENTRY(action_s) actions;
 } action_t;
+
 LIST_HEAD(listhead, action_s) head;
+struct listhead rollback_head;
 
 int load_startup_datastore(ctx_t *ctx);
 

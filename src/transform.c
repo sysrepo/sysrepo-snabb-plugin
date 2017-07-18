@@ -34,12 +34,23 @@
 #include "xpath.h"
 #include "transform.h"
 
-int socket_send(ctx_t *ctx, char *message, sb_command_t command, char **response, sr_notif_event_t event);
+int socket_send(ctx_t *ctx, char *message, sb_command_t command, char **response, sr_notif_event_t event, status_t *status);
 int xpath_to_snabb(ctx_t *ctx, action_t *action, char **message);
 int sysrepo_to_snabb(ctx_t *ctx, action_t *action);
 void free_all_actions();
 void free_action(action_t *action);
 int apply_action(ctx_t *ctx, action_t *action);
+
+bool has_aborted() {
+	action_t *tmp = NULL;
+	LIST_FOREACH(tmp, &head, actions) {
+		if (SR_EV_ABORT == tmp->event) {
+			return true;
+		}
+	}
+
+	return false;
+}
 
 void socket_close(ctx_t *ctx) {
 	if (-1 != ctx->socket_fd) {
@@ -76,7 +87,7 @@ error:
 	return SR_ERR_INTERNAL;
 }
 
-int socket_send(ctx_t *ctx, char *message, sb_command_t command, char **response, sr_notif_event_t event) {
+int socket_send(ctx_t *ctx, char *message, sb_command_t command, char **response, sr_notif_event_t event, status_t *status) {
 	int rc = SR_ERR_OK;
 	int len = 0;
 	int nbytes;
@@ -98,6 +109,9 @@ int socket_send(ctx_t *ctx, char *message, sb_command_t command, char **response
 	nbytes = snprintf(buffer, len, "%s\n%s", str, message);
 
 	//TODO add timeout check
+	if (NULL != status) {
+		*status = EXECUTED;
+	}
 	nbytes = write(ctx->socket_fd, buffer, nbytes);
 	if ((int) strlen(buffer) != (int) nbytes) {
 		ERR("Failed to write full messaget o server: written %d, expected %d", (int) nbytes, (int) strlen(buffer));
@@ -139,6 +153,7 @@ int socket_send(ctx_t *ctx, char *message, sb_command_t command, char **response
 	/* set null terminated string at the beggining */
 	ch[0] = '\0';
 
+	*status = APPLIED;
 	return SR_ERR_OK;
 failed:
 	if (SR_EV_ABORT != event) {
@@ -322,7 +337,7 @@ sysrepo_to_snabb(ctx_t *ctx, action_t *action) {
 
 	/* send to socket */
 	INF_MSG("send to socket");
-	rc = socket_send(ctx, message, command, NULL, action->event);
+	rc = socket_send(ctx, message, command, NULL, action->event, &action->status);
 	CHECK_RET(rc, error, "failed to send message to snabb socket: %s", sr_strerror(rc));
 
 error:
@@ -342,6 +357,7 @@ add_action(ctx_t *ctx, sr_val_t *val, sr_change_oper_t op, sr_notif_event_t even
 	action->value = NULL;
 	action->type = val->type;
 	action->event = event;
+	action->status = CREATED;
 
 	rc = get_yang_type(ctx, action);
 	CHECK_RET(rc, error, "failed get_parent_typer %s", sr_strerror(rc));
@@ -349,6 +365,17 @@ add_action(ctx_t *ctx, sr_val_t *val, sr_change_oper_t op, sr_notif_event_t even
 	/* leaf-list are handled diferently in snabb */
 	if (LYS_LEAFLIST == action->yang_type) {
 		op = SR_OP_CREATED;
+	}
+
+	/* in case ABORT check if xpath is already applied to snabb if yes add it to the list */
+	if (SR_EV_ABORT == action->event) {
+		action_t *tmp = NULL;
+		LIST_FOREACH(tmp, &head, actions) {
+			if (0 == strncmp(val->xpath, tmp->xpath, strlen(tmp->xpath)) && EXECUTED == tmp->status) {
+				free_action(action);
+				return rc;
+			}
+		}
 	}
 
 	if (!list_or_container(val->type) && !leaf_without_value(val->type) && SR_OP_MODIFIED == op) {
@@ -361,7 +388,7 @@ add_action(ctx_t *ctx, sr_val_t *val, sr_change_oper_t op, sr_notif_event_t even
 		/* check if a list/container is already in the list */
 		action_t *tmp = NULL;
 		LIST_FOREACH(tmp, &head, actions) {
-			if (0 == strncmp(val->xpath, tmp->xpath, strlen(tmp->xpath)) && list_or_container(tmp->type)) {
+			if (0 == strncmp(val->xpath, tmp->xpath, strlen(tmp->xpath)) && list_or_container(tmp->type) && tmp->event == event) {
 				free_action(action);
 				return rc;
 			}
@@ -371,7 +398,7 @@ add_action(ctx_t *ctx, sr_val_t *val, sr_change_oper_t op, sr_notif_event_t even
 		action_t *tmp = NULL, *tmp2 = NULL;
 		/* check of contaire/group is covered with some other xpathg */
 		LIST_FOREACH(tmp, &head, actions) {
-			if (0 == strncmp(val->xpath, tmp->xpath, strlen(tmp->xpath)) && list_or_container(tmp->type)) {
+			if (0 == strncmp(val->xpath, tmp->xpath, strlen(tmp->xpath)) && list_or_container(tmp->type) && tmp->event == event) {
 				free_action(action);
 				return rc;
 			}
@@ -380,7 +407,7 @@ add_action(ctx_t *ctx, sr_val_t *val, sr_change_oper_t op, sr_notif_event_t even
 		tmp = LIST_FIRST(&head);
 		while (NULL != tmp) {
 			tmp2 = LIST_NEXT(tmp, actions);
-			if (0 == strncmp(val->xpath, tmp->xpath, strlen(val->xpath))) {
+			if (0 == strncmp(val->xpath, tmp->xpath, strlen(val->xpath)) && tmp->event == event) {
 				LIST_REMOVE(tmp, actions);
 				free_action(tmp);
 			}
@@ -429,28 +456,38 @@ apply_all_actions(ctx_t *ctx) {
 	int rc = SR_ERR_OK;
 	action_t *tmp = NULL;
 
+	/* if aborted actions exist, apply only failed snabb actions */
+	bool aborted = has_aborted();
+
+	/* if the change callback is aborted use the running datastore session */
+	if (true == aborted) {
+		ctx->sess = ctx->running_sess;
+	}
+
 	/* first apply all delete actions */
 	LIST_FOREACH(tmp, &head, actions) {
-		if (SR_OP_DELETED == tmp->op) {
+		if (SR_OP_DELETED == tmp->op && ((!aborted) || (aborted && SR_EV_ABORT == tmp->event))) {
 			rc = apply_action(ctx, tmp);
 			CHECK_RET(rc, cleanup, "failed apply action: %s", sr_strerror(rc));
 		}
 	}
 
-	/* first apply all add/change actions */
+	/* than apply all add/change actions */
 	LIST_FOREACH(tmp, &head, actions) {
-		if (SR_OP_DELETED != tmp->op) {
+		if (SR_OP_DELETED != tmp->op && ((!aborted) || (aborted && SR_EV_ABORT == tmp->event))) {
 			rc = apply_action(ctx, tmp);
 			CHECK_RET(rc, cleanup, "failed apply action: %s", sr_strerror(rc));
 		}
 	}
-
 
 	free_all_actions();
 	return rc;
 
 cleanup:
-	free_all_actions();
+	/* in case aborted action failde free all actions */
+	if (true == aborted) {
+		free_all_actions();
+	}
 	return rc;
 }
 
@@ -577,7 +614,7 @@ snabb_datastore_to_sysrepo(ctx_t *ctx) {
 	INF("%s", message);
 	/* send to socket */
 	INF_MSG("send to socket");
-	rc = socket_send(ctx, message, command, &response, SR_EV_APPLY);
+	rc = socket_send(ctx, message, command, &response, SR_EV_APPLY, NULL);
 	CHECK_RET(rc, error, "failed to send message to snabb socket: %s", sr_strerror(rc));
 
 	rc = transform_data_to_array(ctx, NULL, response, &node);
@@ -813,7 +850,7 @@ snabb_state_data_to_sysrepo(ctx_t *ctx, char *xpath, sr_val_t **values, size_t *
 	INF("%s", message);
 	/* send to socket */
 	INF_MSG("send to socket");
-	rc = socket_send(ctx, message, command, &response, SR_EV_APPLY);
+	rc = socket_send(ctx, message, command, &response, SR_EV_APPLY, NULL);
 	CHECK_RET(rc, error, "failed to send message to snabb socket: %s", sr_strerror(rc));
 
 	rc = transform_data_to_array(ctx, xpath, response, &root);
