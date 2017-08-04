@@ -614,7 +614,8 @@ snabb_datastore_to_sysrepo(ctx_t *ctx) {
 	INF("%s", message);
 	/* send to socket */
 	INF_MSG("send to socket");
-	rc = socket_send(ctx, message, command, &response, SR_EV_APPLY, NULL);
+	status_t status;
+	rc = socket_send(ctx, message, command, &response, SR_EV_APPLY, &status);
 	CHECK_RET(rc, error, "failed to send message to snabb socket: %s", sr_strerror(rc));
 
 	rc = transform_data_to_array(ctx, NULL, response, &node);
