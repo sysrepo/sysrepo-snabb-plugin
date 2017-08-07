@@ -650,16 +650,17 @@ sync_datastores(ctx_t *ctx) {
 	sr_val_t *values = NULL;
 	size_t value_cnt = 0;
 
-	snprintf(xpath, XPATH_MAX_LEN, "/%s:*", ctx->yang_model);
+	/* set a non default xpath for checking if datastore is empty */
+	snprintf(xpath, XPATH_MAX_LEN, "/%s:softwire-config/binding-table/*", ctx->yang_model);
 	/* check if no items are in the datastore
 	 * if yes, srget_items will return error code "no items"
 	 */
 	rc = sr_get_items(ctx->startup_sess, xpath, &values, &value_cnt);
-	if (SR_ERR_NOT_FOUND != rc) {
+	if (SR_ERR_OK != rc) {
 		CHECK_RET(rc, error, "failed sr_get_items: %s", sr_strerror(rc));
 	}
 
-	if (NULL == values) {
+	if (value_cnt <= 1) {
 		/* copy the snabb datastore to sysrepo */
 		INF_MSG("copy snabb data to sysrepo");
 		/* TODO make this more robust
@@ -708,7 +709,7 @@ load_startup_datastore(ctx_t *ctx) {
 	CHECK_RET(rc, cleanup, "Error by sr_connect: %s", sr_strerror(rc));
 
 	/* start session */
-	rc = sr_session_start(connection, SR_DS_STARTUP, SR_SESS_DEFAULT, &session);
+	rc = sr_session_start(connection, SR_DS_STARTUP, SR_SESS_CONFIG_ONLY, &session);
 	CHECK_RET(rc, cleanup, "Error by sr_session_start: %s", sr_strerror(rc));
 
 	ctx->startup_conn = connection;
