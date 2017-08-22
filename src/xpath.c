@@ -40,7 +40,7 @@ get_yang_type(ctx_t *ctx, action_t *action) {
 	int rc = SR_ERR_OK;
 
 	/* check if leaf-list */
-	set = lys_find_xpath(ctx->libyang_ctx, NULL, action->xpath, 0);
+	set = lys_find_path(ctx->module, NULL, action->xpath);
 	if (NULL == set) {
 		rc = SR_ERR_INTERNAL;
 		goto error;
