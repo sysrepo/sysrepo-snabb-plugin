@@ -656,7 +656,7 @@ sync_datastores(ctx_t *ctx) {
 	 * if yes, srget_items will return error code "no items"
 	 */
 	rc = sr_get_items(ctx->startup_sess, xpath, &values, &value_cnt);
-	if (SR_ERR_OK != rc) {
+	if (SR_ERR_OK != rc && SR_ERR_NOT_FOUND != rc) {
 		CHECK_RET(rc, error, "failed sr_get_items: %s", sr_strerror(rc));
 	}
 
