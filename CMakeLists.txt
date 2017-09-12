@@ -11,6 +11,8 @@ set(PLUGIN 0 CACHE BOOL "Build a plugin.")
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/CMakeModules/")
 
 set(SOURCES
+	cfg_parse/cfg_parse.c
+	src/cfg.c
 	src/snabb.c
 	src/xpath.c
 	src/parse.c
@@ -70,3 +72,6 @@ else()
 		endif()
 	endif()
 endif()
+
+# install config file
+install (FILES "./cfg_parse/config.ini" DESTINATION "/etc/sysrepo_snabb")

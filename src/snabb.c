@@ -31,6 +31,7 @@
 #include "parse.h"
 #include "common.h"
 #include "transform.h"
+#include "cfg.h"
 
 #define BUFSIZE 256
 
@@ -152,7 +153,7 @@ module_change_cb(sr_session_ctx_t *session, const char *module_name, sr_notif_ev
 
 	ctx->sess = session;
 
-	if (SR_EV_APPLY == event) {
+	if (SR_EV_APPLY == event && ctx->cfg->sync_startup) {
 		/* copy running datastore to startup */
 
 		rc = sr_copy_config(ctx->startup_sess, module_name, SR_DS_RUNNING, SR_DS_STARTUP);
@@ -241,6 +242,10 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
 	rc = sr_dp_get_items_subscribe(session, xpath, state_data_cb, ctx, SR_SUBSCR_CTX_REUSE, &ctx->sub);
 	CHECK_RET(rc, error, "failed sr_dp_get_items_subscribe: %s", sr_strerror(rc));
 
+	/* load config file */
+	ctx->cfg = init_cfg_file();
+	CHECK_NULL_MSG(ctx->cfg, &rc, error, "failed to parse cfg config file");
+
 	INF("%s plugin initialized successfully", ctx->yang_model);
 
 	return SR_ERR_OK;
@@ -264,6 +269,10 @@ sr_plugin_cleanup_cb(sr_session_ctx_t *session, void *private_ctx) {
 	/* subscription was set as our private context */
 	ctx_t *ctx = private_ctx;
 
+	/* clean config file context */
+	clean_cfg(ctx->cfg);
+
+	/* clean snabb related context */
 	clear_context(ctx);
 }
 

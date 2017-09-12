@@ -26,6 +26,8 @@
 #include <sys/queue.h>
 #include <libyang/libyang.h>
 
+#include "cfg.h"
+
 #define XPATH_MAX_LEN     128
 #define UNIX_PATH_MAX     256
 #define SNABB_MESSAGE_MAX 1024
@@ -60,6 +62,7 @@ typedef struct ctx_s {
 	sr_session_ctx_t *running_sess;
 	sr_conn_ctx_t *startup_conn;
 	sr_session_ctx_t *startup_sess;
+	cfg_ctx *cfg;
 } ctx_t;
 
 typedef struct action_s {
