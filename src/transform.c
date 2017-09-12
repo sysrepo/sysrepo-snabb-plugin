@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <string.h>
 
@@ -649,27 +650,22 @@ error:
 
 int
 sync_datastores(ctx_t *ctx) {
-	char xpath[XPATH_MAX_LEN] = {0};
+	char startup_file[XPATH_MAX_LEN] = {0};
 	int rc = SR_ERR_OK;
-	sr_val_t *values = NULL;
-	size_t value_cnt = 0;
+	struct stat st;
 
-	/* set a non default xpath for checking if datastore is empty */
-	snprintf(xpath, XPATH_MAX_LEN, "/%s:softwire-config/binding-table/*", ctx->yang_model);
-	/* check if no items are in the datastore
-	 * if yes, srget_items will return error code "no items"
-	 */
-	rc = sr_get_items(ctx->startup_sess, xpath, &values, &value_cnt);
-	if (SR_ERR_OK != rc && SR_ERR_NOT_FOUND != rc) {
-		CHECK_RET(rc, error, "failed sr_get_items: %s", sr_strerror(rc));
+	/* check if the startup datastore is empty
+	 * by checking the content of the file */
+	snprintf(startup_file, XPATH_MAX_LEN, "/etc/sysrepo/data/%s.startup", ctx->yang_model);
+
+	if (stat(startup_file, &st) != 0) {
+		ERR("Could not open sysrepo file %s", startup_file);
+		return SR_ERR_INTERNAL;
 	}
 
-	if (value_cnt <= 1) {
+	if (0 == st.st_size) {
 		/* copy the snabb datastore to sysrepo */
 		INF_MSG("copy snabb data to sysrepo");
-		/* TODO make this more robust
-		 * create a list with executed xpath's
-		 */
 		rc = snabb_datastore_to_sysrepo(ctx);
 		CHECK_RET(rc, error, "failed to apply snabb data to sysrepo: %s", sr_strerror(rc));
 	} else {
@@ -680,9 +676,6 @@ sync_datastores(ctx_t *ctx) {
 	}
 
 error:
-	if (NULL != values) {
-		sr_free_values(values, value_cnt);
-	}
 	return rc;
 }
 
