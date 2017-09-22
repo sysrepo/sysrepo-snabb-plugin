@@ -2,5 +2,6 @@
 #define __CONFIG_H__
 
 #define YANG "@YANG_MODEL@"
+#define LEAFLIST @LEAF_LIST@
 
 #endif /* __CONFIG_H__ */

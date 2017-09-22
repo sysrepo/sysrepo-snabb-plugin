@@ -42,8 +42,9 @@ get_yang_type(ctx_t *ctx, action_t *action) {
 	/* check if leaf-list */
 	set = lys_find_path(ctx->module, NULL, action->xpath);
 	if (NULL == set) {
-		rc = SR_ERR_INTERNAL;
-		goto error;
+		/* for choice leafs function return NULL */
+		action->yang_type = LYS_CHOICE;
+		return rc;
 	}
 
 	/* we expect only one node */
@@ -132,6 +133,7 @@ format_xpath(action_t *action) {
 		}
 	}
 
+#ifdef LEAFLIST
 	/* check if leaf-list for empty list's*/
 	if (LYS_LEAFLIST == action->yang_type) {
 		node = sr_xpath_last_node(NULL, &state);
@@ -146,8 +148,12 @@ format_xpath(action_t *action) {
 	} else {
 		action->snabb_xpath = strdup(xpath);
 	}
+#else
+	action->snabb_xpath = strdup(xpath);
+#endif
 
 error:
+	sr_xpath_recover(&state);
 	if (NULL != tmp) {
 		free(tmp);
 	}

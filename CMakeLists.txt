@@ -7,6 +7,7 @@ set(CMAKE_C_FLAGS_DEBUG   "-g -O0")
 
 set(YANG_MODEL "snabb-softwire-v1" CACHE STRING "YANG model to use.")
 set(PLUGIN 0 CACHE BOOL "Build a plugin.")
+set(LEAF_LIST 1 CACHE BOOL "YANG model has a leaf-list in configuration.")
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/CMakeModules/")
 

@@ -304,9 +304,11 @@ sysrepo_to_snabb(ctx_t *ctx, action_t *action) {
 		 * check if value is empty string ""
 		 * and parent_type is LYS_LEAFLIST
 		 */
+#ifdef LEAFLIST
 		if (LYS_LEAFLIST == action->yang_type && 0 == strlen(*value)) {
 			action->yang_type = LYS_UNKNOWN;
 		}
+#endif
 		rc = format_xpath(action);
 		CHECK_RET(rc, error, "failed to format xpath: %s", sr_strerror(rc));
 
@@ -360,21 +362,22 @@ add_action(ctx_t *ctx, sr_val_t *val, sr_change_oper_t op, sr_notif_event_t even
 	action->event = event;
 	action->status = CREATED;
 
+#ifdef LEAFLIST
 	rc = get_yang_type(ctx, action);
-	CHECK_RET(rc, error, "failed get_parent_typer %s", sr_strerror(rc));
+	CHECK_RET(rc, error, "failed get_parent_type %s", sr_strerror(rc));
 
 	/* leaf-list are handled diferently in snabb */
 	if (LYS_LEAFLIST == action->yang_type) {
 		op = SR_OP_CREATED;
 	}
+#endif
 
 	/* in case ABORT check if xpath is already applied to snabb if yes add it to the list */
 	if (SR_EV_ABORT == action->event) {
 		action_t *tmp = NULL;
 		LIST_FOREACH(tmp, &head, actions) {
 			if (0 == strncmp(val->xpath, tmp->xpath, strlen(tmp->xpath)) && EXECUTED == tmp->status) {
-				free_action(action);
-				return rc;
+				goto error;
 			}
 		}
 	}
@@ -382,16 +385,15 @@ add_action(ctx_t *ctx, sr_val_t *val, sr_change_oper_t op, sr_notif_event_t even
 	if (!list_or_container(val->type) && !leaf_without_value(val->type) && SR_OP_MODIFIED == op) {
 		action->value = sr_val_to_str(val);
 		if (NULL == action->value) {
-			free_action(action);
-			return SR_ERR_DATA_MISSING;
+			rc = SR_ERR_DATA_MISSING;
+			goto error;
 		}
 	} else if (!list_or_container(val->type) && (SR_OP_CREATED == op || SR_OP_DELETED == op)) {
 		/* check if a list/container is already in the list */
 		action_t *tmp = NULL;
 		LIST_FOREACH(tmp, &head, actions) {
 			if (0 == strncmp(val->xpath, tmp->xpath, strlen(tmp->xpath)) && list_or_container(tmp->type) && tmp->event == event) {
-				free_action(action);
-				return rc;
+				goto error;
 			}
 		}
 		action->value = NULL;
@@ -400,8 +402,7 @@ add_action(ctx_t *ctx, sr_val_t *val, sr_change_oper_t op, sr_notif_event_t even
 		/* check of contaire/group is covered with some other xpathg */
 		LIST_FOREACH(tmp, &head, actions) {
 			if (0 == strncmp(val->xpath, tmp->xpath, strlen(tmp->xpath)) && list_or_container(tmp->type) && tmp->event == event) {
-				free_action(action);
-				return rc;
+				goto error;
 			}
 		}
 		/* if a list/container is created/deleted remove previous entries of child nodes */
@@ -531,12 +532,13 @@ sysrepo_datastore_to_snabb(ctx_t *ctx) {
 		action->type = trees[i].type;
 		action->event = SR_EV_APPLY;
 
+#ifdef LEAFLIST
 		rc = get_yang_type(ctx, action);
 		if (SR_ERR_OK != rc) {
 			free_action(action);
 		}
-		CHECK_RET(rc, error, "failed get_parent_typer %s", sr_strerror(rc));
-
+		CHECK_RET(rc, error, "failed get_parent_type %s", sr_strerror(rc));
+#endif
 
 		LIST_INSERT_HEAD(&head, action, actions);
 	}

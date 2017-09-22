@@ -62,6 +62,7 @@ parse_yang_model(ctx_t *ctx) {
 
 	/* fetch enbaled features from Sysrepo and enable them in libyang */
 	rc = sr_list_schemas(ctx->sess, &schemas, &schema_cnt);
+	CHECK_RET(rc, error, "failed sr_list_schemas: %s", sr_strerror(rc));
 	for (size_t s = 0; s < schema_cnt; s++) {
 		if (0 == strcmp(ctx->yang_model, schemas[s].module_name)){
 			for (size_t i = 0; i < schemas[s].enabled_feature_cnt; i++) {
