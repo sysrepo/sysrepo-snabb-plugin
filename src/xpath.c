@@ -23,9 +23,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <libyang/libyang.h>
+#include <libyang/tree_data.h>
+
 #include <sysrepo.h>
 #include <sysrepo/xpath.h>
-#include <libyang/tree_data.h>
 
 #include "common.h"
 #include "transform.h"

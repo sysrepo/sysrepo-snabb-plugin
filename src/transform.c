@@ -310,6 +310,7 @@ sysrepo_to_snabb(ctx_t *ctx, action_t *action) {
 		}
 #endif
 		rc = format_xpath(action);
+
 		CHECK_RET(rc, error, "failed to format xpath: %s", sr_strerror(rc));
 
 		int len = SNABB_MESSAGE_MAX + (int) strlen(action->snabb_xpath) + strlen(*value) + (int) strlen(ctx->yang_model);

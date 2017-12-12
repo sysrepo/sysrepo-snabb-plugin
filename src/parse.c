@@ -45,7 +45,7 @@ parse_yang_model(ctx_t *ctx) {
 	/* TODO get sysrepo yang schema path
 	 * will be neede for alarms
 	 * */
-	libyang_ctx = ly_ctx_new(NULL);
+	libyang_ctx = ly_ctx_new(NULL, LY_CTX_ALLIMPLEMENTED);
 	if (NULL == libyang_ctx) {
 		rc = SR_ERR_INTERNAL;
 		goto error;
