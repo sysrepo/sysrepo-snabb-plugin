@@ -587,6 +587,7 @@ libyang_data_to_sysrepo(sr_session_ctx_t *session, struct lyd_node *root) {
 				rc = sr_set_item_str(session, xpath, leaf->value_str, SR_EDIT_DEFAULT);
 				CHECK_RET(rc, error, "failed sr_set_item_str: %s", sr_strerror(rc));
 				free(xpath);
+				xpath = NULL;
 			}
 		}
 		LY_TREE_DFS_END(root, next, node);
