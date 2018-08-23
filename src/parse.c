@@ -51,6 +51,17 @@ parse_yang_model(ctx_t *ctx) {
 		goto error;
 	}
 
+	if (0 == strcmp("ietf-softwire-br", ctx->yang_model)) {
+		rc = sr_get_schema(ctx->running_sess, "ietf-softwire-common", NULL, NULL, SR_SCHEMA_YIN, &schema_content);
+		CHECK_RET(rc, error, "failed sr_get_schema: %s", sr_strerror(rc));
+
+		module = lys_parse_mem(libyang_ctx, schema_content, LYS_IN_YIN);
+		if (NULL == module) {
+			rc = SR_ERR_INTERNAL;
+			goto error;
+		}
+	}
+
 	rc = sr_get_schema(ctx->running_sess, ctx->yang_model, NULL, NULL, SR_SCHEMA_YIN, &schema_content);
 	CHECK_RET(rc, error, "failed sr_get_schema: %s", sr_strerror(rc));
 

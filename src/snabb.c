@@ -203,8 +203,6 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
 	ctx->running_sess = session;
 	ctx->socket_fd = -1;
 
-	snprintf(xpath, XPATH_MAX_LEN, "/%s:softwire-state", ctx->yang_model);
-
 	/* get snabb process ID */
 	rc = get_snabb_pid("%d", &pid);
 	CHECK_RET_MSG(rc, error, "failed to get pid from snabb");
@@ -239,8 +237,11 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
 	rc = sr_module_change_subscribe(session, ctx->yang_model, module_change_cb, ctx, 0, SR_SUBSCR_CTX_REUSE, &ctx->sub);
 	CHECK_RET(rc, error, "failed sr_module_change_subscribe: %s", sr_strerror(rc));
 
-	rc = sr_dp_get_items_subscribe(session, xpath, state_data_cb, ctx, SR_SUBSCR_CTX_REUSE, &ctx->sub);
-	CHECK_RET(rc, error, "failed sr_dp_get_items_subscribe: %s", sr_strerror(rc));
+	if (0 != strcmp("ietf-softwire-br", ctx->yang_model)) {
+		snprintf(xpath, XPATH_MAX_LEN, "/%s:softwire-state", ctx->yang_model);
+		rc = sr_dp_get_items_subscribe(session, xpath, state_data_cb, ctx, SR_SUBSCR_CTX_REUSE, &ctx->sub);
+		CHECK_RET(rc, error, "failed sr_dp_get_items_subscribe: %s", sr_strerror(rc));
+	}
 
 	/* load config file */
 	ctx->cfg = init_cfg_file();
