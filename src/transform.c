@@ -59,35 +59,6 @@ void socket_close(ctx_t *ctx) {
 	}
 }
 
-int socket_connect(ctx_t *ctx) {
-	struct sockaddr_un address;
-	int  rc;
-
-	INF("connect to snabb socket /run/snabb/%d/config-leader-socket", ctx->pid);
-
-	ctx->socket_fd = socket(PF_UNIX, SOCK_STREAM, 0);
-	if (ctx->socket_fd < 0) {
-		WRN("failed to create UNIX socket: %d", ctx->socket_fd);
-		goto error;
-	}
-
-	snprintf(ctx->socket_path, UNIX_PATH_MAX, "/run/snabb/%d/config-leader-socket", ctx->pid);
-
-	/* start with a clean address structure */
-	memset(&address, 0, sizeof(struct sockaddr_un));
-
-	address.sun_family = AF_UNIX;
-	snprintf(address.sun_path, UNIX_PATH_MAX, "/run/snabb/%d/config-leader-socket", ctx->pid);
-
-	rc = connect(ctx->socket_fd, (struct sockaddr *) &address, sizeof(struct sockaddr_un));
-	CHECK_RET_MSG(rc, error, "failed connection to snabb socket");
-
-	return SR_ERR_OK;
-error:
-	socket_close(ctx);
-	return SR_ERR_INTERNAL;
-}
-
 int socket_send(ctx_t *ctx, char *message, sb_command_t command, char **response, sr_notif_event_t event, status_t *status) {
 	int rc = SR_ERR_OK;
 	int len = 0;
@@ -115,9 +86,15 @@ int socket_send(ctx_t *ctx, char *message, sb_command_t command, char **response
 	}
 	nbytes = write(ctx->socket_fd, buffer, nbytes);
 	if ((int) strlen(buffer) != (int) nbytes) {
-		ERR("Failed to write full messaget o server: written %d, expected %d", (int) nbytes, (int) strlen(buffer));
-		rc = SR_ERR_INTERNAL;
-		goto error;
+		if (-1 == nbytes) {
+			snabb_socket_reconnect(ctx);
+			free(buffer);
+			return socket_send(ctx, message, command, response, event, status);
+		} else {
+			ERR("Failed to write full message to server: written %d, expected %d", (int) nbytes, (int) strlen(buffer));
+			rc = SR_ERR_INTERNAL;
+			goto error;
+		}
 	}
 	free(buffer);
 	buffer = NULL;
@@ -902,4 +879,58 @@ error:
 		free(response);
 	}
 	return rc;
+}
+
+int
+snabb_socket_reconnect(ctx_t *ctx) {
+	int32_t pid = 0;
+	struct sockaddr_un address;
+	int rc = SR_ERR_OK;
+	FILE *fp = NULL;
+	int BUFSIZE = 256;
+	char buf[BUFSIZE];
+
+	// close existing socket if exists
+	if (-1 != ctx->socket_fd) {
+		close(ctx->socket_fd);
+	}
+
+	// extract pid from the command "snabb ps"
+	if ((fp = popen("exec bash -c 'snabb ps | head -n1 | cut -d \" \" -f1'", "r")) == NULL) {
+		ERR_MSG("Error opening pipe!");
+		return SR_ERR_INTERNAL;
+	}
+
+	if (fgets(buf, BUFSIZE, fp) != NULL) {
+		sscanf(buf, "%d", &pid);
+	} else {
+		ERR_MSG("Error running 'snabb ps' command.");
+		goto error;
+	}
+	INF("connect to snabb socket /run/snabb/%d/config-leader-socket", pid);
+
+	ctx->socket_fd = socket(PF_UNIX, SOCK_STREAM, 0);
+	if (ctx->socket_fd < 0) {
+		WRN("failed to create UNIX socket: %d", ctx->socket_fd);
+		goto error;
+	}
+
+	snprintf(ctx->socket_path, UNIX_PATH_MAX, "/run/snabb/%d/config-leader-socket", pid);
+
+	/* start with a clean address structure */
+	memset(&address, 0, sizeof(struct sockaddr_un));
+
+	address.sun_family = AF_UNIX;
+	snprintf(address.sun_path, UNIX_PATH_MAX, "/run/snabb/%d/config-leader-socket", pid);
+
+	rc = connect(ctx->socket_fd, (struct sockaddr *) &address, sizeof(struct sockaddr_un));
+	CHECK_RET_MSG(rc, error, "failed connection to snabb socket");
+
+	return SR_ERR_OK;
+error:
+	if (fp) {
+		pclose(fp);
+	}
+	socket_close(ctx);
+	return SR_ERR_INTERNAL;
 }

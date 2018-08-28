@@ -33,8 +33,6 @@
 #include "transform.h"
 #include "cfg.h"
 
-#define BUFSIZE 256
-
 const char *YANG_MODEL = YANG;
 
 static int
@@ -79,29 +77,6 @@ apply_change(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t *new_v
 	return rc;
 error:
 	//TODO free list
-	return rc;
-}
-
-static int
-get_snabb_pid(const char *fmt, void *ptr) {
-	int rc = SR_ERR_OK;
-	FILE *fp;
-	char buf[BUFSIZE];
-
-	if ((fp = popen("exec bash -c 'snabb ps | head -n1 | cut -d \" \" -f1'", "r")) == NULL) {
-		ERR_MSG("Error opening pipe!");
-		return SR_ERR_INTERNAL;
-	}
-
-	if (fgets(buf, BUFSIZE, fp) != NULL) {
-		sscanf(buf, fmt, ptr);
-	} else {
-		ERR_MSG("Error running 'snabb ps' command.");
-		return SR_ERR_INTERNAL;
-	}
-
-	rc = pclose(fp);
-
 	return rc;
 }
 
@@ -193,7 +168,6 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
 	char xpath[XPATH_MAX_LEN] = {0};
 	int rc = SR_ERR_OK;
 	ctx_t *ctx = NULL;
-	int32_t pid = 0;
 
 	ctx = malloc(sizeof *ctx);
 	ctx->yang_model = YANG_MODEL;
@@ -203,19 +177,12 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
 	ctx->running_sess = session;
 	ctx->socket_fd = -1;
 
-	/* get snabb process ID */
-	rc = get_snabb_pid("%d", &pid);
-	CHECK_RET_MSG(rc, error, "failed to get pid from snabb");
-
-	ctx->pid = pid;
-	INF("snabb pid is %d", pid);
+	/* get snabb socket */
+	rc = snabb_socket_reconnect(ctx);
+	CHECK_RET_MSG(rc, error, "failed to get socket from snabb");
 
 	/* set subscription as our private context */
 	*private_ctx = ctx;
-
-	/* connect to snabb UNIX socket */
-	rc = socket_connect(ctx);
-	CHECK_RET(rc, error, "failed socket_connect: %s", sr_strerror(rc));
 
 	/* initialize action list */
 	LIST_INIT(&head);

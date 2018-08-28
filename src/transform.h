@@ -54,7 +54,6 @@ typedef struct ctx_s {
 	const char *yang_model;
     struct ly_ctx *libyang_ctx;
 	const struct lys_module *module;
-	int pid;
 	int socket_fd;
 	char socket_path[UNIX_PATH_MAX];
 	sr_subscription_ctx_t *sub;
@@ -83,8 +82,6 @@ struct listhead rollback_head;
 int load_startup_datastore(ctx_t *ctx);
 
 void clear_context(ctx_t *ctx);
-int socket_connect(ctx_t *ctx);
-void socket_close(ctx_t *ctx);
 
 int snabb_state_data_to_sysrepo(ctx_t *ctx, char *xpath, sr_val_t **values, size_t *values_cnt);
 
@@ -92,5 +89,7 @@ int add_action(ctx_t *ctx, sr_val_t *val, sr_change_oper_t op, sr_notif_event_t 
 int apply_all_actions(ctx_t *ctx);
 
 int sync_datastores(ctx_t *ctx);
+
+int snabb_socket_reconnect(ctx_t *);
 
 #endif /* TRANSFORM_H */
