@@ -35,7 +35,7 @@
 int
 parse_yang_model(ctx_t *ctx) {
 	const struct lys_module *module = NULL;
-    struct ly_ctx *libyang_ctx = NULL;
+	struct ly_ctx *libyang_ctx = NULL;
 	char *schema_content = NULL;
 	sr_schema_t *schemas = NULL;
 	size_t schema_cnt = 0;

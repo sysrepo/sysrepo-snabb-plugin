@@ -759,42 +759,42 @@ set_value(sr_val_t *value, LY_DATA_TYPE type, lyd_val leaf)
 
 	value->type = sr_ly_data_type_to_sr(type);
 
-    switch (type) {
-    case LY_TYPE_BOOL:
-        value->data.bool_val = leaf.bln;
-        return SR_ERR_OK;
-    case LY_TYPE_DEC64:
-        value->data.decimal64_val = (double) leaf.dec64;
-        return SR_ERR_OK;
-    case LY_TYPE_UNION:
-        return SR_ERR_OK;
-    case LY_TYPE_INT8:
-        value->data.int8_val = leaf.int8;
-        return SR_ERR_OK;
-    case LY_TYPE_UINT8:
-        value->data.uint8_val = leaf.uint8;
-        return SR_ERR_OK;
-    case LY_TYPE_INT16:
-        value->data.int16_val = leaf.int16;
-        return SR_ERR_OK;
-    case LY_TYPE_UINT16:
-        value->data.uint16_val = leaf.uint16;
-        return SR_ERR_OK;
-    case LY_TYPE_INT32:
-        value->data.int32_val = leaf.int32;
-        return SR_ERR_OK;
-    case LY_TYPE_UINT32:
-        value->data.uint32_val = leaf.uint32;
-        return SR_ERR_OK;
-    case LY_TYPE_INT64:
-        value->data.int64_val = leaf.int64;
-        return SR_ERR_OK;
-    case LY_TYPE_UINT64:
-        value->data.uint64_val = leaf.uint64;
-        return SR_ERR_OK;
-    default:
-        return SR_ERR_INTERNAL;
-    }
+	switch (type) {
+	case LY_TYPE_BOOL:
+		value->data.bool_val = leaf.bln;
+		return SR_ERR_OK;
+	case LY_TYPE_DEC64:
+		value->data.decimal64_val = (double) leaf.dec64;
+		return SR_ERR_OK;
+	case LY_TYPE_UNION:
+		return SR_ERR_OK;
+	case LY_TYPE_INT8:
+		value->data.int8_val = leaf.int8;
+		return SR_ERR_OK;
+	case LY_TYPE_UINT8:
+		value->data.uint8_val = leaf.uint8;
+		return SR_ERR_OK;
+	case LY_TYPE_INT16:
+		value->data.int16_val = leaf.int16;
+		return SR_ERR_OK;
+	case LY_TYPE_UINT16:
+		value->data.uint16_val = leaf.uint16;
+		return SR_ERR_OK;
+	case LY_TYPE_INT32:
+		value->data.int32_val = leaf.int32;
+		return SR_ERR_OK;
+	case LY_TYPE_UINT32:
+		value->data.uint32_val = leaf.uint32;
+		return SR_ERR_OK;
+	case LY_TYPE_INT64:
+		value->data.int64_val = leaf.int64;
+		return SR_ERR_OK;
+	case LY_TYPE_UINT64:
+		value->data.uint64_val = leaf.uint64;
+		return SR_ERR_OK;
+	default:
+		return SR_ERR_INTERNAL;
+	}
 }
 
 int
@@ -840,8 +840,8 @@ snabb_state_data_to_sysrepo(ctx_t *ctx, char *xpath, sr_val_t **values, size_t *
 		LY_TREE_DFS_END(root, next, node);
 	}
 
-    sr_val_t *v = NULL;
-    rc = sr_new_values(cnt, &v);
+	sr_val_t *v = NULL;
+	rc = sr_new_values(cnt, &v);
 	CHECK_RET(rc, error, "failed sr_new_values: %s", sr_strerror(rc));
 
 	int i = 0;

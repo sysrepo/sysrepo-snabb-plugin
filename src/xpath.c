@@ -166,7 +166,7 @@ error:
 }
 
 void add_default_nodes(ctx_t *ctx, struct lyd_node *root) {
-    const struct lyd_node *node = NULL, *next = NULL;
+	const struct lyd_node *node = NULL, *next = NULL;
 
 	LY_TREE_DFS_BEGIN(root, next, node) {
 		if (LYS_LIST == node->schema->nodetype || LYS_CONTAINER == node->schema->nodetype) {

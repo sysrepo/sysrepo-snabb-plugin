@@ -152,14 +152,14 @@ error:
 static int
 state_data_cb(const char *xpath, sr_val_t **values, size_t *values_cnt, uint64_t request_id,  void *private_ctx)
 {
-    int rc = SR_ERR_OK;
+	int rc = SR_ERR_OK;
 
 	ctx_t *ctx = private_ctx;
 	rc = snabb_state_data_to_sysrepo(ctx, (char *) xpath, values, values_cnt);
 	CHECK_RET(rc, error, "failed to load state data: %s", sr_strerror(rc));
 
 error:
-    return rc;
+	return rc;
 }
 
 int

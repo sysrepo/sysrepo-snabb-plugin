@@ -36,12 +36,12 @@
 char ch[SNABB_SOCKET_MAX];
 
 typedef enum sb_command_e {
-    SB_GET = 0,   /* read configuration data */
-    SB_GET_STATE, /* read state data */
-    SB_LOAD,      /* load a new configuration */
-    SB_SET,       /* incrementally update configuration */
-    SB_ADD,       /* augment configuration, for example by adding a routing table entry */
-    SB_REMOVE,    /* remove a component from a configuration, for example removing a routing table entry */
+	SB_GET = 0,   /* read configuration data */
+	SB_GET_STATE, /* read state data */
+	SB_LOAD,      /* load a new configuration */
+	SB_SET,       /* incrementally update configuration */
+	SB_ADD,       /* augment configuration, for example by adding a routing table entry */
+	SB_REMOVE,    /* remove a component from a configuration, for example removing a routing table entry */
 } sb_command_t;
 
 typedef enum status_e {
@@ -52,7 +52,7 @@ typedef enum status_e {
 
 typedef struct ctx_s {
 	const char *yang_model;
-    struct ly_ctx *libyang_ctx;
+	struct ly_ctx *libyang_ctx;
 	const struct lys_module *module;
 	int socket_fd;
 	char socket_path[UNIX_PATH_MAX];
