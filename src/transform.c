@@ -89,6 +89,7 @@ int socket_send(ctx_t *ctx, char *message, sb_command_t command, char **response
 		if (-1 == nbytes) {
 			snabb_socket_reconnect(ctx);
 			free(buffer);
+			//TODO prevent infinit loop
 			return socket_send(ctx, message, command, response, event, status);
 		} else {
 			ERR("Failed to write full message to server: written %d, expected %d", (int) nbytes, (int) strlen(buffer));
