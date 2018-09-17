@@ -19,6 +19,16 @@ set(SOURCES
 	src/parse.c
 	src/transform.c)
 
+# git SHA1 hash
+execute_process(COMMAND
+  git describe --always --abbrev=40
+  WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+  OUTPUT_VARIABLE GIT_SHA1
+  ERROR_QUIET OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+# generate version.h
+configure_file("${PROJECT_SOURCE_DIR}/src/version.h.in" "${PROJECT_SOURCE_DIR}/src/version.h" ESCAPE_QUOTES @ONLY)
+
 CONFIGURE_FILE("${PROJECT_SOURCE_DIR}/src/config.h.in" "${PROJECT_SOURCE_DIR}/src/config.h" ESCAPE_QUOTES @ONLY)
 
 if (PLUGIN)

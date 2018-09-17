@@ -32,6 +32,7 @@
 #include "common.h"
 #include "transform.h"
 #include "cfg.h"
+#include "version.h"
 
 const char *YANG_MODEL = YANG;
 
