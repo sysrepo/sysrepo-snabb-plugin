@@ -129,7 +129,10 @@ module_change_cb(sr_session_ctx_t *session, const char *module_name, sr_notif_ev
 
 	ctx->sess = session;
 
-	if (SR_EV_APPLY == event && ctx->cfg->sync_startup) {
+	if (SR_EV_APPLY == event) {
+		if (false == ctx->cfg->sync_startup) {
+			return SR_ERR_OK;
+		}
 		/* copy running datastore to startup */
 
 		rc = sr_copy_config(ctx->startup_sess, module_name, SR_DS_RUNNING, SR_DS_STARTUP);
