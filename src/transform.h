@@ -29,7 +29,7 @@
 #include "cfg.h"
 
 #define XPATH_MAX_LEN     128
-#define UNIX_PATH_MAX     256
+#define UNIX_PATH_MAX     108
 #define SNABB_MESSAGE_MAX 1024
 #define SNABB_SOCKET_MAX  100000000
 
