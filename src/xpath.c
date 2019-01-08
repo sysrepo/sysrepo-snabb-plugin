@@ -83,17 +83,18 @@ leaf_without_value(sr_type_t type) {
  */
 int
 format_xpath(action_t *action) {
-    char *xpath = NULL, *node = NULL, *tmp = NULL;
+    char *node = NULL;
     sr_xpath_ctx_t state = {0,0,0,0};
     int rc = SR_ERR_OK;
 
     /* snabb xpath is always smaller than sysrepo's xpath */
-    xpath = malloc(sizeof(xpath) * strlen(action->xpath));
-    CHECK_NULL_MSG(xpath, &rc, error, "failed to allocate memory");
-    strcpy(xpath, "");
+    char *xpath = strdup(action->xpath);
+    char *tmp = strdup(action->xpath);
+    int len = strlen(action->xpath);
 
-    tmp = malloc(sizeof(tmp) * strlen(action->xpath));
+    CHECK_NULL_MSG(xpath, &rc, error, "failed to allocate memory");
     CHECK_NULL_MSG(tmp, &rc, error, "failed to allocate memory");
+    xpath[0] = '\0';
 
     node = sr_xpath_next_node(action->xpath, &state);
     if (NULL == node) {
@@ -102,33 +103,33 @@ format_xpath(action_t *action) {
     }
 
     while(true) {
-        strcat(xpath, "/");
+        strncat(xpath, "/", len);
         if (NULL != node) {
-            strcat(xpath, node);
+            strncat(xpath, node, len);
         }
 
-        strcpy(tmp,"");
+        tmp[0] = '\0';
         while(true) {
             char *key, *value;
             key = sr_xpath_next_key_name(NULL, &state);
             if (NULL == key) {
                 break;
             }
-            strcat(tmp,"[");
-            strcat(tmp,key);
-            strcat(tmp,"=");
+            strncat(tmp, "[", len);
+            strncat(tmp, key, len);
+            strncat(tmp, "=", len);
             value = sr_xpath_next_key_value(NULL, &state);
-            strcat(tmp,value);
-            strcat(tmp,"]");
+            strncat(tmp, value, len);
+            strncat(tmp, "]", len);
         }
         node = sr_xpath_next_node(NULL, &state);
         if (list_or_container(action->type) && action->op == SR_OP_CREATED) {
             if (NULL == node) {
                 break;
             }
-            strcat(xpath, tmp);
+            strncat(xpath, tmp, len);
         } else {
-            strcat(xpath, tmp);
+            strncat(xpath, tmp, len);
             if (NULL == node) {
                 break;
             }
@@ -243,7 +244,7 @@ transform_data_to_array(ctx_t *ctx, char *xpath, char *data, struct lyd_node **n
     i = 0;
     while ((token = strsep(&data, "\n")) != NULL) {
         i++;
-        while (token != '\0') {
+        while (*token != '\0') {
             if (' ' == *token) {
                 token++;
             } else {
@@ -263,7 +264,7 @@ transform_data_to_array(ctx_t *ctx, char *xpath, char *data, struct lyd_node **n
             continue;
         } else if ('}' == *token) {
             /* when list/container are closed set new parent */
-            parent = parent->parent;
+            parent = parent ? parent->parent : NULL;
             continue;
         } else {
             last = &token[strlen(token) - 1];
@@ -284,7 +285,7 @@ transform_data_to_array(ctx_t *ctx, char *xpath, char *data, struct lyd_node **n
                 continue;
             } else if ('}' == *last) {
                 /* when list/container are closed set new parent */
-                parent = parent->parent;
+                parent = parent ? parent->parent : NULL;
                 continue;
             } else {
                 *last = '\0';

@@ -179,19 +179,19 @@ int fill_list(sr_node_t *tree, char **message, int *len) {
             break;
         } else if (list_or_container(tree->type)) {
             //TODO check for error
-            strcat(*message, tree->name);
-            strcat(*message, " { ");
+            strncat(*message, tree->name, *len);
+            strncat(*message, " { ", *len);
             rc = fill_list(tree->first_child, message, len);
             CHECK_RET(rc, cleanup, "failed fill_list: %s", sr_strerror(rc));
-            strcat(*message, " } ");
+            strncat(*message, " } ", *len);
         } else {
             //TODO check for error
-            strcat(*message, tree->name);
-            strcat(*message, " ");
+            strncat(*message, tree->name, *len);
+            strncat(*message, " ", *len);
             char *value = sr_val_to_str((sr_val_t *) tree);
-            strcat(*message, value);
+            strncat(*message, value, *len);
             free(value);
-            strcat(*message, "; ");
+            strncat(*message, "; ", *len);
         }
         tree = tree->next;
     }
@@ -206,7 +206,7 @@ xpath_to_snabb(ctx_t *ctx, action_t *action, char **message) {
     int len = SNABB_MESSAGE_MAX;
     sr_node_t *trees = NULL;
 
-    *message = malloc(sizeof(*message) * len);
+    *message = malloc(sizeof(**message) * len);
     CHECK_NULL_MSG(*message, &rc, error, "failed to allocate memory");
 
     *message[0] = '\0';
@@ -222,19 +222,19 @@ xpath_to_snabb(ctx_t *ctx, action_t *action, char **message) {
     if (1 == tree_cnt) {
         if (true == list_or_container(trees[0].type)) {
             if (SR_LIST_T == trees[0].type) {
-                strcat(*message, " { ");
+                strncat(*message, " { ", len);
             }
             rc = fill_list(trees->first_child, message, &len);
             CHECK_RET(rc, error, "failed to create snabb configuration data: %s", sr_strerror(rc));
             if (SR_LIST_T == trees[0].type) {
-                strcat(*message, " } ");
+                strncat(*message, " } ", len);
             }
         } else {
             char *value = sr_val_to_str((sr_val_t *) &trees[0]);
-            strcat(*message, trees[0].name);
-            strcat(*message, " ");
-            strcat(*message, value);
-            strcat(*message, ";");
+            strncat(*message, trees[0].name, len);
+            strncat(*message, " ", len);
+            strncat(*message, value, len);
+            strncat(*message, ";", len);
             free(value);
         }
     } else {
@@ -271,7 +271,7 @@ sysrepo_to_snabb(ctx_t *ctx, action_t *action) {
         rc = format_xpath(action);
         CHECK_RET(rc, error, "failed to format xpath: %s", sr_strerror(rc));
 
-        message = malloc(sizeof(message) * (SNABB_MESSAGE_MAX + strlen(action->snabb_xpath) + strlen(ctx->yang_model)));
+        message = malloc(sizeof(*message) * (SNABB_MESSAGE_MAX + strlen(action->snabb_xpath) + strlen(ctx->yang_model)));
         CHECK_NULL_MSG(message, &rc, error, "failed to allocate memory");
 
         snprintf(message, SNABB_MESSAGE_MAX, "set-config {path '%s'; config '%s'; schema %s;}", action->snabb_xpath, action->value, ctx->yang_model);
@@ -294,7 +294,7 @@ sysrepo_to_snabb(ctx_t *ctx, action_t *action) {
         CHECK_RET(rc, error, "failed to format xpath: %s", sr_strerror(rc));
 
         int len = SNABB_MESSAGE_MAX + (int) strlen(action->snabb_xpath) + strlen(*value) + (int) strlen(ctx->yang_model);
-        message = malloc(sizeof(message) * len);
+        message = malloc(sizeof(*message) * len);
         CHECK_NULL_MSG(message, &rc, error, "failed to allocate memory");
 
         if (action->type == SR_LIST_T) {
@@ -309,7 +309,7 @@ sysrepo_to_snabb(ctx_t *ctx, action_t *action) {
         rc = format_xpath(action);
         CHECK_RET(rc, error, "failed to format xpath: %s", sr_strerror(rc));
 
-        message = malloc(sizeof(message) * (SNABB_MESSAGE_MAX + strlen(action->snabb_xpath) + strlen(ctx->yang_model)));
+        message = malloc(sizeof(*message) * (SNABB_MESSAGE_MAX + strlen(action->snabb_xpath) + strlen(ctx->yang_model)));
         CHECK_NULL_MSG(message, &rc, error, "failed to allocate memory");
 
         snprintf(message, SNABB_MESSAGE_MAX, "remove-config {path '%s'; schema %s;}", action->snabb_xpath, ctx->yang_model);
