@@ -10,7 +10,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *	http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -45,37 +45,37 @@
 #endif
 
 #define CHECK_RET_MSG(RET, LABEL, MSG)                                                                                                               \
-	do {                                                                                                                                             \
-		if (SR_ERR_OK != RET) {                                                                                                                      \
-			ERR_MSG(MSG) SRP_LOG_ERR_MSG(MSG);                                                                                                       \
-			goto LABEL;                                                                                                                              \
-		}                                                                                                                                            \
-	} while (0)
+    do {                                                                                                                                             \
+        if (SR_ERR_OK != RET) {                                                                                                                      \
+            ERR_MSG(MSG) SRP_LOG_ERR_MSG(MSG);                                                                                                       \
+            goto LABEL;                                                                                                                              \
+        }                                                                                                                                            \
+    } while (0)
 
 #define CHECK_RET(RET, LABEL, MSG, ...)                                                                                                              \
-	do {                                                                                                                                             \
-		if (SR_ERR_OK != RET) {                                                                                                                      \
-			ERR(MSG, __VA_ARGS__) SRP_LOG_ERR(MSG, __VA_ARGS__);                                                                                     \
-			goto LABEL;                                                                                                                              \
-		}                                                                                                                                            \
-	} while (0)
+    do {                                                                                                                                             \
+        if (SR_ERR_OK != RET) {                                                                                                                      \
+            ERR(MSG, __VA_ARGS__) SRP_LOG_ERR(MSG, __VA_ARGS__);                                                                                     \
+            goto LABEL;                                                                                                                              \
+        }                                                                                                                                            \
+    } while (0)
 
 #define CHECK_NULL_MSG(VALUE, RET, LABEL, MSG)                                                                                                       \
-	do {                                                                                                                                             \
-		if (NULL == VALUE) {                                                                                                                         \
-			*RET = SR_ERR_NOMEM;                                                                                                                     \
-			ERR_MSG(MSG) SRP_LOG_ERR_MSG(MSG);                                                                                                       \
-			goto LABEL;                                                                                                                              \
-		}                                                                                                                                            \
-	} while (0)
+    do {                                                                                                                                             \
+        if (NULL == VALUE) {                                                                                                                         \
+            *RET = SR_ERR_NOMEM;                                                                                                                     \
+            ERR_MSG(MSG) SRP_LOG_ERR_MSG(MSG);                                                                                                       \
+            goto LABEL;                                                                                                                              \
+        }                                                                                                                                            \
+    } while (0)
 
 #define CHECK_NULL(VALUE, RET, LABEL, MSG, ...)                                                                                                      \
-	do {                                                                                                                                             \
-		if (NULL == VALUE) {                                                                                                                         \
-			*RET = SR_ERR_NOMEM;                                                                                                                     \
-			ERR(MSG, __VA_ARGS__) SRP_LOG_ERR(MSG, __VA_ARGS__);                                                                                     \
-			goto LABEL;                                                                                                                              \
-		}                                                                                                                                            \
-	} while (0)
+    do {                                                                                                                                             \
+        if (NULL == VALUE) {                                                                                                                         \
+            *RET = SR_ERR_NOMEM;                                                                                                                     \
+            ERR(MSG, __VA_ARGS__) SRP_LOG_ERR(MSG, __VA_ARGS__);                                                                                     \
+            goto LABEL;                                                                                                                              \
+        }                                                                                                                                            \
+    } while (0)
 
 #endif /* __COMMON_H__ */
