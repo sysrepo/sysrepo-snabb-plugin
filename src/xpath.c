@@ -165,39 +165,39 @@ error:
     return rc;
 }
 
-void add_default_nodes(ctx_t *ctx, struct lyd_node *root) {
-    const struct lyd_node *node = NULL, *next = NULL;
-
-    LY_TREE_DFS_BEGIN(root, next, node) {
-        if (LYS_LIST == node->schema->nodetype || LYS_CONTAINER == node->schema->nodetype) {
-            struct lys_node *next = NULL, *elem = NULL;
-            LY_TREE_FOR_SAFE(node->schema->child, next, elem) {
-                if (elem->nodetype == LYS_LEAF || elem->nodetype == LYS_LEAFLIST) {
-                    struct lys_node_leaf *leaf = (struct lys_node_leaf *) elem;
-                    /* check if node exists
-                     * if not add a data node with default value
-                     */
-                    if (NULL != leaf->dflt) {
-                        struct lyd_node *lyd_next = NULL, *lyd_elem = NULL;
-                        bool found = false;
-                        LY_TREE_FOR_SAFE(node->child, lyd_next, lyd_elem) {
-                            if (0 == strncmp(lyd_elem->schema->name, leaf->name, strlen(leaf->name))) {
-                                found = true;
-                            }
-                        }
-                        if (false == found) {
-                            lyd_new_leaf((struct lyd_node *) node, ctx->module, leaf->name, leaf->dflt);
-                        }
-                    }
-                }
-
-            }
-        }
-        LY_TREE_DFS_END(root, next, node);
-    }
-
-    return;
-}
+//void add_default_nodes(ctx_t *ctx, struct lyd_node *root) {
+//    const struct lyd_node *node = NULL, *next = NULL;
+//
+//    LY_TREE_DFS_BEGIN(root, next, node) {
+//        if (LYS_LIST == node->schema->nodetype || LYS_CONTAINER == node->schema->nodetype) {
+//            struct lys_node *next = NULL, *elem = NULL;
+//            LY_TREE_FOR_SAFE(node->schema->child, next, elem) {
+//                if (elem->nodetype == LYS_LEAF || elem->nodetype == LYS_LEAFLIST) {
+//                    struct lys_node_leaf *leaf = (struct lys_node_leaf *) elem;
+//                    /* check if node exists
+//                     * if not add a data node with default value
+//                     */
+//                    if (NULL != leaf->dflt) {
+//                        struct lyd_node *lyd_next = NULL, *lyd_elem = NULL;
+//                        bool found = false;
+//                        LY_TREE_FOR_SAFE(node->child, lyd_next, lyd_elem) {
+//                            if (0 == strncmp(lyd_elem->schema->name, leaf->name, strlen(leaf->name))) {
+//                                found = true;
+//                            }
+//                        }
+//                        if (false == found) {
+//                            lyd_new_leaf((struct lyd_node *) node, ctx->module, leaf->name, leaf->dflt);
+//                        }
+//                    }
+//                }
+//
+//            }
+//        }
+//        LY_TREE_DFS_END(root, next, node);
+//    }
+//
+//    return;
+//}
 
 /* TODO refactor this */
 int
@@ -299,7 +299,7 @@ transform_data_to_array(ctx_t *ctx, char *xpath, char *data, struct lyd_node **n
         }
     }
     /* add default values */
-    add_default_nodes(ctx, top_parent);
+    //add_default_nodes(ctx, top_parent);
 
     /* validate the libyang data nodes */
     if (0 != lyd_validate(&top_parent, LYD_OPT_GET, NULL)) {

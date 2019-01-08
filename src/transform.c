@@ -597,7 +597,7 @@ snabb_datastore_to_sysrepo(ctx_t *ctx) {
     char *response = NULL;
     struct lyd_node *node = NULL;
 
-    snprintf(message, SNABB_MESSAGE_MAX, "get-config {path '/'; schema %s;}", ctx->yang_model);
+    snprintf(message, SNABB_MESSAGE_MAX, "get-config {path '/'; print-default 'true'; schema %s;}", ctx->yang_model);
     command = SB_GET;
 
     INF("%s", message);
