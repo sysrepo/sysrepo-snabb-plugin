@@ -333,6 +333,10 @@ int
 add_action(ctx_t *ctx, sr_val_t *val, sr_change_oper_t op, sr_notif_event_t event) {
     int rc = SR_ERR_OK;
 
+    if (SR_OP_MOVED == op) {
+        return rc;
+    }
+
     action_t *action = malloc(sizeof(action_t));
     action->xpath = strdup(val->xpath);
     action->snabb_xpath = NULL;

@@ -37,51 +37,6 @@
 const char *YANG_MODEL = YANG;
 
 static int
-apply_change(ctx_t *ctx, sr_change_oper_t op, sr_val_t *old_val, sr_val_t *new_val, sr_notif_event_t event) {
-    int rc = SR_ERR_OK;
-
-    switch(op) {
-    case SR_OP_CREATED:
-        if (NULL != new_val) {
-            printf("CREATED: ");
-            sr_print_val(new_val);
-            rc = add_action(ctx, new_val, op, event);
-            CHECK_RET(rc, error, "failed to add operation: %s", sr_strerror(rc));
-        }
-        break;
-    case SR_OP_DELETED:
-        if (NULL != old_val) {
-            printf("DELETED: ");
-            sr_print_val(old_val);
-            rc = add_action(ctx, old_val, op, event);
-            CHECK_RET(rc, error, "failed to add operation: %s", sr_strerror(rc));
-        }
-    break;
-    case SR_OP_MODIFIED:
-        if (NULL != old_val && NULL != new_val) {
-            printf("MODIFIED: ");
-            printf("old value ");
-            sr_print_val(old_val);
-            printf("new value ");
-            rc = add_action(ctx, new_val, op, event);
-            CHECK_RET(rc, error, "failed to add operation: %s", sr_strerror(rc));
-        }
-    break;
-    case SR_OP_MOVED:
-        if (NULL != new_val) {
-            //TODO implement this
-            printf("MOVED: %s after %s", new_val->xpath, NULL != old_val ? old_val->xpath : NULL);
-        }
-    break;
-    }
-
-    return rc;
-error:
-    //TODO free list
-    return rc;
-}
-
-static int
 parse_config(sr_session_ctx_t *session, const char *module_name, ctx_t *ctx, sr_notif_event_t event) {
     sr_change_iter_t *it = NULL;
     int rc = SR_ERR_OK;
@@ -94,21 +49,22 @@ parse_config(sr_session_ctx_t *session, const char *module_name, ctx_t *ctx, sr_
 
     rc = sr_get_changes_iter(session, xpath , &it);
     if (SR_ERR_OK != rc) {
-        printf("Get changes iter failed for xpath %s", xpath);
+        ERR("Get changes iter failed for xpath %s", xpath);
         goto error;
     }
 
     while (SR_ERR_OK == (rc = sr_get_change_next(session, it, &oper, &old_value, &new_value))) {
-        rc = apply_change(ctx, oper, old_value, new_value, event);
+        sr_val_t *val = NULL != new_value ? new_value : old_value;
+        rc = add_action(ctx, val, oper, event);
         sr_free_val(old_value);
         sr_free_val(new_value);
         CHECK_RET(rc, error, "failed to add operation: %s", sr_strerror(rc));
     }
 
-    action_t *tmp = NULL;
-    LIST_FOREACH(tmp, &head, actions) {
-        INF("Add liste entry: xpath: %s, value: %s, op: %d", tmp->xpath, tmp->value, tmp->op);
-    }
+    //action_t *tmp = NULL;
+    //LIST_FOREACH(tmp, &head, actions) {
+    //    INF("Add liste entry: xpath: %s, value: %s, op: %d", tmp->xpath, tmp->value, tmp->op);
+    //}
 
     rc = apply_all_actions(ctx);
     CHECK_RET(rc, error, "failed execute all operations: %s", sr_strerror(rc));
