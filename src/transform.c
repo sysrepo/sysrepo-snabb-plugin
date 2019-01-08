@@ -75,7 +75,7 @@ int socket_send(ctx_t *ctx, char *message, sb_command_t command, char **response
 
     len = (int) strlen(&str[0]) + 1 + (int) strlen(message) + 1;
 
-    buffer = malloc(sizeof(buffer) * len);
+    buffer = malloc(sizeof(*buffer) * len);
     CHECK_NULL_MSG(buffer, &rc, error, "failed to allocate memory");
 
     nbytes = snprintf(buffer, len, "%s\n%s", str, message);
@@ -132,7 +132,9 @@ int socket_send(ctx_t *ctx, char *message, sb_command_t command, char **response
     /* set null terminated string at the beggining */
     ch[0] = '\0';
 
-    *status = APPLIED;
+    if (NULL != status) {
+        *status = APPLIED;
+    }
     return SR_ERR_OK;
 failed:
     if (SR_EV_ABORT != event) {
