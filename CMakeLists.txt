@@ -68,6 +68,14 @@ find_package(SYSREPO REQUIRED)
 target_link_libraries(${CMAKE_PROJECT_NAME} ${SYSREPO_LIBRARIES})
 include_directories(${SYSREPO_INCLUDE_DIRS})
 
+# find pthreads
+set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
+find_package(Threads REQUIRED)
+target_link_libraries(${CMAKE_PROJECT_NAME} ${CMAKE_THREAD_LIBS_INIT})
+
+# pthread
+set(CMAKE_REQUIRED_LIBRARIES pthread)
+
 # get sysrepo plugins directory
 if (NOT SR_PLUGINS_DIR)
     if (PKG_CONFIG_FOUND)

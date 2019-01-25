@@ -22,4 +22,14 @@
 #ifndef SNABB_H
 #define SNABB_H
 
+#include <pthread.h>
+#include <sysrepo.h>
+
+typedef struct iter_change_s {
+    sr_val_t *old_val; // data passed from sysrepo
+    sr_val_t *new_val; // data passed from sysrepo
+    sr_change_oper_t oper; // data passed from sysrepo
+    bool create_snabb; //use this iteration for creating a snabb command
+} iter_change_t;
+
 #endif /* SNABB_H */

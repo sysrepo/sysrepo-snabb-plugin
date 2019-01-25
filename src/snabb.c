@@ -25,6 +25,7 @@
 #include <sysrepo.h>
 #include <sysrepo/values.h>
 #include <sysrepo/plugins.h>
+#include <pthread.h>
 
 #include "config.h"
 #include "snabb.h"
@@ -39,11 +40,31 @@ const char *YANG_MODEL = YANG;
 static int
 parse_config(sr_session_ctx_t *session, const char *module_name, ctx_t *ctx, sr_notif_event_t event) {
     sr_change_iter_t *it = NULL;
+    iter_change_t *iter_change = NULL;
+    iter_change_t **p_iter_change = NULL;
+    size_t iter_cnt = 0;
     int rc = SR_ERR_OK;
     sr_change_oper_t oper;
     sr_val_t *old_value = NULL;
     sr_val_t *new_value = NULL;
+    iter_change = NULL;
     char xpath[XPATH_MAX_LEN] = {0,};
+    pthread_rwlock_t iter_lock;
+
+    rc = pthread_rwlock_init(&iter_lock, NULL);
+    if (0 != rc) {
+        ERR_MSG("failed to create rwlock");
+        goto error;
+    }
+
+    // initalize the array
+    pthread_rwlock_wrlock(&iter_lock);
+    size_t iter_change_size = 10;
+    iter_cnt = 0;
+    iter_change = calloc(iter_change_size, sizeof(*iter_change));
+    CHECK_NULL_MSG(iter_change, &rc, error, "failed to allocate memory");
+    p_iter_change = &iter_change;
+    pthread_rwlock_unlock(&iter_lock);
 
     snprintf(xpath, XPATH_MAX_LEN, "/%s:*", module_name);
 
@@ -53,29 +74,53 @@ parse_config(sr_session_ctx_t *session, const char *module_name, ctx_t *ctx, sr_
         goto error;
     }
 
-    while (SR_ERR_OK == (rc = sr_get_change_next(session, it, &oper, &old_value, &new_value))) {
-        sr_val_t *val = NULL != new_value ? new_value : old_value;
-        rc = add_action(ctx, val, oper, event);
-        sr_free_val(old_value);
-        sr_free_val(new_value);
-        CHECK_RET(rc, error, "failed to add operation: %s", sr_strerror(rc));
+    size_t prev = 0;
+    while (SR_ERR_OK == sr_get_change_next(session, it, &oper, &old_value, &new_value)) {
+        iter_change[iter_cnt].old_val = old_value;
+        iter_change[iter_cnt].new_val = new_value;
+        iter_change[iter_cnt].oper = oper;
+
+        if (is_new_snabb_command(&iter_change[iter_cnt], &iter_change[prev])) {
+            INF("cahnge prev %zd current %zd", prev, iter_cnt);
+            if (iter_cnt) {
+                rc = xpaths_to_snabb_socket(p_iter_change, &iter_lock, prev, iter_cnt);
+            }
+            prev = iter_cnt;
+        }
+
+        ++iter_cnt;
+
+        /* lock the mutex and resize the array if needed */
+        if (iter_cnt >= iter_change_size) {
+            pthread_rwlock_wrlock(&iter_lock);
+            iter_change_size *= 4;
+            iter_change = realloc(iter_change, sizeof(*iter_change) * iter_change_size);
+            CHECK_NULL_MSG(iter_change, &rc, error, "failed to allocate memory");
+            p_iter_change = &iter_change;
+            pthread_rwlock_unlock(&iter_lock);
+        }
+        CHECK_NULL_MSG(iter_change, &rc, error, "failed to allocate memory");
     }
+    rc = xpaths_to_snabb_socket(p_iter_change, &iter_lock, prev, iter_cnt);
 
-    //action_t *tmp = NULL;
-    //LIST_FOREACH(tmp, &head, actions) {
-    //    INF("Add liste entry: xpath: %s, value: %s, op: %d", tmp->xpath, tmp->value, tmp->op);
-    //}
-
-    rc = apply_all_actions(ctx);
-    CHECK_RET(rc, error, "failed execute all operations: %s", sr_strerror(rc));
+    //rc = sr_to_snabb_worker(p_iter_change, &iter, &iter_cnt, iter_lock);
+    //CHECK_RET(rc, error, "failed execute all operations: %s", sr_strerror(rc));
 
 error:
     if (NULL != it) {
         sr_free_change_iter(it);
     }
+    if (iter_change) {
+        for(size_t i = 0; i < iter_cnt; ++i) {
+            sr_free_val(iter_change[i].old_val);
+            sr_free_val(iter_change[i].new_val);
+        }
+        free(iter_change);
+        iter_change = NULL;
+    }
+    pthread_rwlock_destroy(&iter_lock);
     return rc;
 }
-
 
 static int
 module_change_cb(sr_session_ctx_t *session, const char *module_name, sr_notif_event_t event, void *private_ctx) {

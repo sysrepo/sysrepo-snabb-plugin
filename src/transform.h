@@ -26,6 +26,7 @@
 #include <sys/queue.h>
 #include <libyang/libyang.h>
 
+#include "snabb.h"
 #include "cfg.h"
 
 #define XPATH_MAX_LEN     128
@@ -91,5 +92,9 @@ int apply_all_actions(ctx_t *ctx);
 int sync_datastores(ctx_t *ctx);
 
 int snabb_socket_reconnect(ctx_t *);
+
+bool is_new_snabb_command(iter_change_t *, iter_change_t *);
+
+int xpaths_to_snabb_socket(iter_change_t **, pthread_rwlock_t *, size_t, size_t);
 
 #endif /* TRANSFORM_H */
