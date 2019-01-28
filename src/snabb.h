@@ -22,4 +22,39 @@
 #ifndef SNABB_H
 #define SNABB_H
 
+#include <sysrepo.h>
+#include <libyang/libyang.h>
+
+#include "config.h"
+#include "snabb.h"
+#include "cfg.h"
+
+#define XPATH_MAX_LEN     128
+#define UNIX_PATH_MAX     108
+#define SNABB_MESSAGE_MAX 256
+#define SNABB_SOCKET_MAX  100000000
+
+char ch[SNABB_SOCKET_MAX];
+
+typedef struct global_ctx_s {
+    const char *yang_model;
+    struct ly_ctx *libyang_ctx;
+    const struct lys_module *module;
+    int socket_fd;
+    char socket_path[UNIX_PATH_MAX];
+    sr_subscription_ctx_t *sub;
+    sr_session_ctx_t *sess;
+    sr_conn_ctx_t *startup_conn;
+    sr_session_ctx_t *startup_sess;
+    pthread_rwlock_t snabb_lock;
+    pthread_rwlock_t iter_lock;
+    cfg_ctx *cfg;
+} global_ctx_t;
+
+typedef struct iter_change_s {
+    sr_val_t *old_val; // data passed from sysrepo
+    sr_val_t *new_val; // data passed from sysrepo
+    sr_change_oper_t oper; // data passed from sysrepo
+} iter_change_t;
+
 #endif /* SNABB_H */

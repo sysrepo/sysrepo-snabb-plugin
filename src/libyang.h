@@ -1,7 +1,7 @@
 /**
  * @file xpath.h
  * @author Mislav Novakovic <mislav.novakovic@sartur.hr>
- * @brief header file for xpath.c.
+ * @brief header file for libyang.c.
  *
  * @copyright
  * Copyright (C) 2017 Deutsche Telekom AG.
@@ -19,15 +19,13 @@
  * limitations under the License.
  */
 
-#ifndef XPATH_H
-#define XPATH_H
+#ifndef LIBYANG_H
+#define LIBYANG_H
 
-#include "transform.h"
+#include "snabb.h"
 
-bool leaf_without_value(sr_type_t type);
-bool list_or_container(sr_type_t type);
-int format_xpath(action_t *action);
-int transform_data_to_array(ctx_t *ctx, char *xpath, char *data, struct lyd_node **node);
-int get_yang_type(ctx_t *ctx, action_t *action);
+bool list_or_container(sr_type_t);
+int transform_data_to_array(global_ctx_t *, char *, char *, struct lyd_node **);
+int parse_yang_model(global_ctx_t *);
 
-#endif /* XPATH_H */
+#endif /* LIBYANG_H */

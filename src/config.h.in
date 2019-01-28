@@ -3,5 +3,6 @@
 
 #define YANG "@YANG_MODEL@"
 #define LEAFLIST @LEAF_LIST@
+#define THREADS @THREADS@
 
 #endif /* __CONFIG_H__ */

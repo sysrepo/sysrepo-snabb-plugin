@@ -25,25 +25,57 @@
 #include <sysrepo.h>
 #include <sysrepo/values.h>
 #include <sysrepo/plugins.h>
+#include <pthread.h>
 
-#include "config.h"
-#include "snabb.h"
-#include "parse.h"
 #include "common.h"
+#include "snabb.h"
 #include "transform.h"
+#include "libyang.h"
+#include "config.h"
 #include "cfg.h"
-#include "version.h"
+#include "thpool.h"
 
 const char *YANG_MODEL = YANG;
 
+thread_job_t *create_job(global_ctx_t *ctx, iter_change_t **p_iter, size_t begin, size_t end, int *rc) {
+    thread_job_t *job = NULL;
+
+    job = (thread_job_t *) malloc(sizeof(thread_job_t));
+    if (job) {
+        job->ctx = ctx;
+        job->p_iter = p_iter;
+        job->begin = begin;
+        job->end = end;
+        job->rc = rc;
+    }
+
+    return job;
+}
+
 static int
-parse_config(sr_session_ctx_t *session, const char *module_name, ctx_t *ctx, sr_notif_event_t event) {
+parse_config(sr_session_ctx_t *session, const char *module_name, global_ctx_t *ctx, sr_notif_event_t event) {
     sr_change_iter_t *it = NULL;
+    iter_change_t *iter_change = NULL;
+    iter_change_t **p_iter_change = NULL;
+    size_t iter_cnt = 0;
+    size_t prev = 0;
     int rc = SR_ERR_OK;
+    int thread_rc = SR_ERR_OK;
     sr_change_oper_t oper;
     sr_val_t *old_value = NULL;
     sr_val_t *new_value = NULL;
+    iter_change = NULL;
     char xpath[XPATH_MAX_LEN] = {0,};
+
+    /* create threads */
+    threadpool thpool = thpool_init(THREADS);
+
+    // initalize the array
+    size_t iter_change_size = 10;
+    iter_cnt = 0;
+    iter_change = calloc(iter_change_size, sizeof(*iter_change));
+    CHECK_NULL_MSG(iter_change, &rc, error, "failed to allocate memory");
+    p_iter_change = &iter_change;
 
     snprintf(xpath, XPATH_MAX_LEN, "/%s:*", module_name);
 
@@ -53,34 +85,60 @@ parse_config(sr_session_ctx_t *session, const char *module_name, ctx_t *ctx, sr_
         goto error;
     }
 
-    while (SR_ERR_OK == (rc = sr_get_change_next(session, it, &oper, &old_value, &new_value))) {
-        sr_val_t *val = NULL != new_value ? new_value : old_value;
-        rc = add_action(ctx, val, oper, event);
-        sr_free_val(old_value);
-        sr_free_val(new_value);
-        CHECK_RET(rc, error, "failed to add operation: %s", sr_strerror(rc));
+    INF_MSG("start iterating over the changes");
+    bool skip = true;
+    while (SR_ERR_OK == sr_get_change_next(session, it, &oper, &old_value, &new_value)) {
+        iter_change[iter_cnt].old_val = old_value;
+        iter_change[iter_cnt].new_val = new_value;
+        iter_change[iter_cnt].oper = oper;
+
+        if (is_new_snabb_command(&iter_change[iter_cnt], &iter_change[prev])) {
+            if (!skip) {
+                thpool_add_work(thpool, xpaths_to_snabb_socket, create_job(ctx, p_iter_change, prev, iter_cnt, &thread_rc));
+            }
+            skip = false;
+            prev = iter_cnt;
+        }
+
+        ++iter_cnt;
+
+        /* lock the mutex and resize the array if needed */
+        if (iter_cnt >= iter_change_size) {
+            pthread_rwlock_wrlock(&ctx->iter_lock);
+            iter_change_size *= 4;
+            iter_change = realloc(iter_change, sizeof(*iter_change) * iter_change_size);
+            p_iter_change = &iter_change;
+            pthread_rwlock_unlock(&ctx->iter_lock);
+            CHECK_NULL_MSG(iter_change, &rc, error, "failed to allocate memory");
+        }
     }
-
-    //action_t *tmp = NULL;
-    //LIST_FOREACH(tmp, &head, actions) {
-    //    INF("Add liste entry: xpath: %s, value: %s, op: %d", tmp->xpath, tmp->value, tmp->op);
-    //}
-
-    rc = apply_all_actions(ctx);
-    CHECK_RET(rc, error, "failed execute all operations: %s", sr_strerror(rc));
+    thpool_add_work(thpool, xpaths_to_snabb_socket, create_job(ctx, p_iter_change, prev, iter_cnt, &thread_rc));
 
 error:
+    thpool_wait(thpool);
+    thpool_destroy(thpool);
+
     if (NULL != it) {
         sr_free_change_iter(it);
+    }
+    if (iter_change) {
+        for(size_t i = 0; i < iter_cnt; ++i) {
+            sr_free_val(iter_change[i].old_val);
+            sr_free_val(iter_change[i].new_val);
+        }
+        free(iter_change);
+        iter_change = NULL;
+    }
+    if (thread_rc != SR_ERR_OK) {
+        return thread_rc;
     }
     return rc;
 }
 
-
 static int
 module_change_cb(sr_session_ctx_t *session, const char *module_name, sr_notif_event_t event, void *private_ctx) {
     int rc = SR_ERR_OK;
-    ctx_t *ctx = private_ctx;
+    global_ctx_t *ctx = private_ctx;
     INF("%s configuration has changed.", ctx->yang_model);
 
     ctx->sess = session;
@@ -120,7 +178,7 @@ state_data_cb(const char *xpath, sr_val_t **values, size_t *values_cnt, uint64_t
 {
     int rc = SR_ERR_OK;
 
-    ctx_t *ctx = private_ctx;
+    global_ctx_t *ctx = private_ctx;
     rc = snabb_state_data_to_sysrepo(ctx, (char *) xpath, values, values_cnt);
     CHECK_RET(rc, error, "failed to load state data: %s", sr_strerror(rc));
 
@@ -130,28 +188,40 @@ error:
 
 int
 sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
-    sr_subscription_ctx_t *subscription = NULL;
-    char xpath[XPATH_MAX_LEN] = {0};
     int rc = SR_ERR_OK;
-    ctx_t *ctx = NULL;
+    char xpath[XPATH_MAX_LEN] = {0};
+    global_ctx_t *ctx = NULL;
 
-    ctx = malloc(sizeof *ctx);
+    ctx = calloc(1, sizeof *ctx);
+    CHECK_NULL_MSG(ctx, &rc, error, "failed malloc global context");
+
     ctx->yang_model = YANG_MODEL;
-    ctx->libyang_ctx = NULL;
-    ctx->sub = subscription;
     ctx->sess = session;
-    ctx->running_sess = session;
     ctx->socket_fd = -1;
 
+    /* init mutex for snabb socket */
+    rc = pthread_rwlock_init(&ctx->snabb_lock, NULL);
+    if (0 != rc) {
+        rc = SR_ERR_INTERNAL;
+        ERR_MSG("failed to create snabb rwlock");
+        goto error;
+    }
+
+    /* init mutex for change_cb */
+    rc = pthread_rwlock_init(&ctx->iter_lock, NULL);
+    if (0 != rc) {
+        ERR_MSG("failed to create rwlock");
+        goto error;
+    }
+
     /* get snabb socket */
+    pthread_rwlock_wrlock(&ctx->snabb_lock);
     rc = snabb_socket_reconnect(ctx);
     CHECK_RET_MSG(rc, error, "failed to get socket from snabb");
+    pthread_rwlock_unlock(&ctx->snabb_lock);
 
     /* set subscription as our private context */
     *private_ctx = ctx;
-
-    /* initialize action list */
-    LIST_INIT(&head);
 
     /* parse the yang model */
     INF("Parse yang model %s with libyang", ctx->yang_model);
@@ -167,19 +237,18 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
     rc = sync_datastores(ctx);
     CHECK_RET(rc, error, "failed to apply sysrepo startup data to snabb: %s", sr_strerror(rc));
 
-    rc = sr_module_change_subscribe(session, ctx->yang_model, module_change_cb, ctx, 0, SR_SUBSCR_CTX_REUSE, &ctx->sub);
+    rc = sr_module_change_subscribe(ctx->sess, ctx->yang_model, module_change_cb, ctx, 0, SR_SUBSCR_CTX_REUSE, &ctx->sub);
     CHECK_RET(rc, error, "failed sr_module_change_subscribe: %s", sr_strerror(rc));
 
     if (0 != strcmp("ietf-softwire-br", ctx->yang_model)) {
         snprintf(xpath, XPATH_MAX_LEN, "/%s:softwire-state", ctx->yang_model);
-        rc = sr_dp_get_items_subscribe(session, xpath, state_data_cb, ctx, SR_SUBSCR_CTX_REUSE, &ctx->sub);
+        rc = sr_dp_get_items_subscribe(ctx->sess, xpath, state_data_cb, ctx, SR_SUBSCR_CTX_REUSE, &ctx->sub);
         CHECK_RET(rc, error, "failed sr_dp_get_items_subscribe: %s", sr_strerror(rc));
     }
 
     /* load config file */
     ctx->cfg = init_cfg_file();
     CHECK_NULL_MSG(ctx->cfg, &rc, error, "failed to parse cfg config file");
-
     INF("%s plugin initialized successfully", ctx->yang_model);
 
     return SR_ERR_OK;
@@ -197,17 +266,14 @@ error:
 
 void
 sr_plugin_cleanup_cb(sr_session_ctx_t *session, void *private_ctx) {
-    if (NULL == session || NULL == private_ctx) {
-        return;
-    }
     /* subscription was set as our private context */
-    ctx_t *ctx = private_ctx;
-
-    /* clean config file context */
-    clean_cfg(ctx->cfg);
+    global_ctx_t *ctx = private_ctx;
 
     /* clean snabb related context */
-    clear_context(ctx);
+    if (ctx) {
+        clear_context(ctx);
+    }
+
 }
 
 #ifndef PLUGIN
@@ -248,13 +314,10 @@ main() {
         sleep(1);  /* or do some more useful work... */
     }
 
-    sr_plugin_cleanup_cb(session, private_ctx);
 cleanup:
-    if (NULL != session) {
-        sr_session_stop(session);
-    }
-    if (NULL != connection) {
-        sr_disconnect(connection);
-    }
+    sr_plugin_cleanup_cb(session, private_ctx);
+
+    sr_session_stop(session);
+    sr_disconnect(connection);
 }
 #endif
