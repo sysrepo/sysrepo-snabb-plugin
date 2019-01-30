@@ -30,6 +30,7 @@
 #include <sysrepo.h>
 #include <sysrepo/values.h>
 #include <sysrepo/plugins.h>
+#include <sysrepo/xpath.h>
 #include <libyang/libyang.h>
 #include <libyang/tree_data.h>
 #include <libyang/tree_schema.h>
@@ -1070,8 +1071,9 @@ is_new_snabb_command(iter_change_t *iter, iter_change_t *prev) {
         }
     }
 
-    /* one snabb command for deleting list or containers */
-    if (SR_OP_DELETED == iter->oper && iter->old_val->type < SR_BINARY_T) {
+    /* one snabb command for deleting list or containers
+    lib/yang/path_data.lua:436: Remove only allowed on arrays and tables */
+    if (SR_OP_DELETED == iter->oper && iter->old_val->type == SR_LIST_T) {
         if (SR_OP_DELETED != prev->oper) {
             return true;
         } else {
@@ -1102,12 +1104,66 @@ is_new_snabb_command(iter_change_t *iter, iter_change_t *prev) {
     return false;
 }
 
+char *
+sr_xpath_to_snabb(char *xpath) {
+    char *node = NULL;
+    sr_xpath_ctx_t state = {0,0,0,0};
+    int rc = SR_ERR_OK;
+
+    /* snabb xpath is always smaller than sysrepo's xpath */
+    char *tmp = strdup(xpath);
+    int len = strlen(xpath);
+
+    CHECK_NULL_MSG(tmp, &rc, error, "failed to allocate memory");
+    *tmp = '\0'; // init xpath string
+
+    node = sr_xpath_next_node(xpath, &state);
+    CHECK_NULL_MSG(node, &rc, error, "failed sr_xpath_next_node");
+
+    while(true) {
+        strncat(tmp, "/", len);
+        if (NULL != node) {
+            strncat(tmp, node, len);
+        }
+
+        while(true) {
+            char *key, *value;
+            /* iterate over key value pairs in xpath */
+            key = sr_xpath_next_key_name(NULL, &state);
+            if (NULL == key) {
+                break;
+            }
+            strncat(tmp, "[", len);
+            strncat(tmp, key, len);
+            strncat(tmp, "=", len);
+            value = sr_xpath_next_key_value(NULL, &state);
+            strncat(tmp, value, len);
+            strncat(tmp, "]", len);
+        }
+        /* iterate over nodes in xpath */
+        node = sr_xpath_next_node(NULL, &state);
+
+        if (NULL == node) {
+            break;
+        }
+    }
+
+error:
+    sr_xpath_recover(&state);
+    if (rc == SR_ERR_OK) {
+        return tmp;
+    } else {
+        free(tmp);
+        return NULL;
+    }
+}
+
 int
 sr_modified_operation(sr_val_t *val) {
     int rc = SR_ERR_OK;
 
     char *leaf = sr_val_to_str(val);
-    INF("modified %s %s", val->xpath, leaf);
+    INF("\nmodified %s %s", sr_xpath_to_snabb(val->xpath), leaf);
     if (leaf) free(leaf);
 
     return rc;
@@ -1117,7 +1173,7 @@ int
 sr_deleted_operation(sr_val_t *val) {
     int rc = SR_ERR_OK;
 
-    INF("delete %s", val->xpath);
+    INF("\ndelete %s", sr_xpath_to_snabb(val->xpath));
 
     return rc;
 }
@@ -1141,39 +1197,77 @@ error:
     return ctx;
 }
 
+void
+lyd_to_snabb_json(struct lyd_node *node, char *message, int len) {
+    bool add_brackets = false;
+
+    if (*message == '\0') {
+        add_brackets = true;
+        strncat(message, "{ ", len);
+    }
+
+    while (node && node->schema) {
+        if (node->schema->flags == LYS_CONTAINER || node->schema->flags == LYS_LIST) {
+            strncat(message, node->schema->name, len);
+            strncat(message, " { ", len);
+            lyd_to_snabb_json(node->child, message, 1000);
+            strncat(message, " } ", len);
+        } else {
+            strncat(message, node->schema->name, len);
+            strncat(message, " ", len);
+            struct lyd_node_leaf_list *leaf = (struct lyd_node_leaf_list *) node;
+            strncat(message, leaf->value_str, len);
+            strncat(message, "; ", len);
+        }
+        node = node->next;
+    }
+
+    if (add_brackets) {
+        strncat(message, "}", len);
+    }
+}
+
 int
 sr_created_operation(iter_change_t **p_iter, pthread_rwlock_t *iter_lock, size_t begin, size_t end) {
     iter_change_t *iter = *p_iter;
     int rc = SR_ERR_OK;
-    struct lyd_node *node = NULL;
+    struct lyd_node *root = NULL;
     struct ly_ctx *ctx = parse_yang_model2();
+    char *xpath = NULL;
 
     pthread_rwlock_rdlock(iter_lock);
-    sr_val_t *create = iter[begin].new_val;
+    sr_val_t *create_val = iter[begin].new_val;
+    xpath = iter[begin].new_val->xpath;
     for (size_t i = begin; i < end; ++i) {
         sr_val_t *val = iter[i].new_val;
-        INF("XPATH %s", val->xpath);
         char *leaf = sr_val_to_str(val);
-        node = lyd_new_path(node, ctx, val->xpath, (void *) leaf, 0, 1);
+        if (root) {
+            lyd_new_path(root, ctx, val->xpath, (void *) leaf, 0, 1);
+        } else {
+            root = lyd_new_path(NULL, ctx, val->xpath, (void *) leaf, 0, 1);
+        }
         if (leaf) {
             free(leaf);
         }
     }
     pthread_rwlock_unlock(iter_lock);
 
-    while (node) {
-        if (NULL == node->parent) break;
-        node = node->parent;
-    }
-
-    struct ly_set *set = lyd_find_path(node, create->xpath);
+    struct ly_set *set = lyd_find_path(root, create_val->xpath);
 
     char *data = NULL;
-    lyd_print_mem(&data, *(set->set.d), LYD_JSON, 0);
+    int len = 1000;
+    data = malloc(sizeof(*data) * len);
+    *data = '\0';
 
-    INF("DATA:\n%s\n", data);
+    lyd_to_snabb_json((*set->set.d)->child, data, len);
+
+    // snabb xpath can't have leafs at the end
+    INF("\ncreated %s %s", sr_xpath_to_snabb(xpath), data);
     free(data);
 
+    ly_set_free(set);
+    lyd_free_withsiblings(root);
+    ly_ctx_destroy(ctx, NULL);
     return rc;
 }
 
@@ -1184,8 +1278,6 @@ xpaths_to_snabb_socket(iter_change_t **p_iter, pthread_rwlock_t *iter_lock, size
     sr_val_t *tmp_val = NULL;
     int rc = SR_ERR_OK;
 
-    INF("%zd -> %zd", begin, end);
-
     pthread_rwlock_rdlock(iter_lock);
     oper = iter[begin].oper;
     if (SR_OP_DELETED == oper) {
@@ -1194,14 +1286,16 @@ xpaths_to_snabb_socket(iter_change_t **p_iter, pthread_rwlock_t *iter_lock, size
         tmp_val = iter[begin].new_val;
     } else {
         tmp_val = iter[begin].new_val;
-        // created nodes
     }
     pthread_rwlock_unlock(iter_lock);
 
     if (SR_OP_MODIFIED == oper) {
         rc = sr_modified_operation(tmp_val);
     } else if (SR_OP_DELETED == oper) {
-        rc = sr_deleted_operation(tmp_val);
+        /* snabb allows remove operations only on arrays and tables, list and leaf-list */
+        if (tmp_val->type == SR_LIST_T) {
+            rc = sr_deleted_operation(tmp_val);
+        }
     } else {
         rc = sr_created_operation(p_iter, iter_lock, begin, end);
     }
