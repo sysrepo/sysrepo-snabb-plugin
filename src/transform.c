@@ -767,46 +767,69 @@ is_new_snabb_command(iter_change_t *iter, iter_change_t *prev) {
 }
 
 int
-sr_modified_operation(sr_val_t *val) {
+sr_modified_operation(global_ctx_t *ctx, sr_val_t *val) {
     int rc = SR_ERR_OK;
+    char *message = NULL;
+    char *snabb_xpath = NULL;
+    char *leaf = NULL;
 
-    char *leaf = sr_val_to_str(val);
-    char *snabb_xpath = sr_xpath_to_snabb(val->xpath);
-    INF("\nmodified %s %s\n", snabb_xpath, leaf);
-    free(snabb_xpath);
-    if (leaf) free(leaf);
+    leaf = sr_val_to_str(val);
+    CHECK_NULL_MSG(leaf, &rc, cleanup, "failed to allocate memory");
+    snabb_xpath = sr_xpath_to_snabb(val->xpath);
+    CHECK_NULL_MSG(snabb_xpath, &rc, cleanup, "failed to allocate memory");
 
+    int len = 47 + strlen(snabb_xpath) + strlen(ctx->yang_model) + strlen(leaf);
+    message = malloc(sizeof(*message) * len);
+    CHECK_NULL_MSG(message, &rc, cleanup, "failed to allocate memory");
+
+    snprintf(message, len, "set-config {path '%s'; config '%s'; schema %s;}", snabb_xpath, leaf, ctx->yang_model);
+
+    /* send to socket */
+    INF_MSG("send to socket");
+    rc = socket_send(ctx, message, NULL, false, false);
+    CHECK_RET(rc, cleanup, "failed to send message to snabb socket: %s", sr_strerror(rc));
+
+cleanup:
+    if (message) {
+        free(message);
+    }
+    if (snabb_xpath) {
+        free(snabb_xpath);
+    }
+    if (leaf) {
+        free(leaf);
+    }
     return rc;
 }
 
 int
-sr_deleted_operation(sr_val_t *val) {
+sr_deleted_operation(global_ctx_t *ctx, sr_val_t *val) {
     int rc = SR_ERR_OK;
+    char *snabb_xpath = NULL;
+    char *message = NULL;
 
-    char *snabb_xpath = sr_xpath_to_snabb(val->xpath);
-    INF("\ndelete %s\n", snabb_xpath);
-    free(snabb_xpath);
+    snabb_xpath = sr_xpath_to_snabb(val->xpath);
+    CHECK_NULL_MSG(snabb_xpath, &rc, cleanup, "failed to allocate memory");
 
+    int len = 38 + strlen(snabb_xpath) + strlen(ctx->yang_model);
+    message = malloc(sizeof(*message) * len);
+    CHECK_NULL_MSG(message, &rc, cleanup, "failed to allocate memory");
+
+    snprintf(message, len, "remove-config {path '%s'; schema %s;}", snabb_xpath, ctx->yang_model);
+
+    /* send to socket */
+    INF_MSG("send to socket");
+    rc = socket_send(ctx, message, NULL, false, false);
+    CHECK_RET(rc, cleanup, "failed to send message to snabb socket: %s", sr_strerror(rc));
+
+cleanup:
+    if (message) {
+        free(message);
+    }
+    if (snabb_xpath) {
+        free(snabb_xpath);
+    }
     return rc;
-}
-
-struct ly_ctx *
-parse_yang_model2() {
-    const struct lys_module *module = NULL;
-    struct ly_ctx *ctx = NULL;
-
-    ctx = ly_ctx_new(NULL, LY_CTX_ALLIMPLEMENTED);
-    if (NULL == ctx) {
-        goto error;
-    }
-
-    module = lys_parse_path(ctx, "/etc/sysrepo/yang/snabb-softwire-v2@2017-04-17.yang", LYS_IN_YANG);
-    if (NULL == module) {
-        goto error;
-    }
-
-error:
-    return ctx;
 }
 
 void
@@ -841,11 +864,13 @@ lyd_to_snabb_json(struct lyd_node *node, char *message, int len) {
 }
 
 int
-sr_created_operation(iter_change_t **p_iter, pthread_rwlock_t *iter_lock, size_t begin, size_t end) {
+sr_created_operation(global_ctx_t *ctx, iter_change_t **p_iter, pthread_rwlock_t *iter_lock, size_t begin, size_t end) {
     iter_change_t *iter = *p_iter;
+    char *snabb_xpath = NULL;
+    char *message = NULL;
+    char *data = NULL;
     int rc = SR_ERR_OK;
     struct lyd_node *root = NULL;
-    struct ly_ctx *ctx = parse_yang_model2();
     char *xpath = NULL;
 
     pthread_rwlock_rdlock(iter_lock);
@@ -855,9 +880,9 @@ sr_created_operation(iter_change_t **p_iter, pthread_rwlock_t *iter_lock, size_t
         sr_val_t *val = iter[i].new_val;
         char *leaf = sr_val_to_str(val);
         if (root) {
-            lyd_new_path(root, ctx, val->xpath, (void *) leaf, 0, 1);
+            lyd_new_path(root, ctx->libyang_ctx, val->xpath, (void *) leaf, 0, 1);
         } else {
-            root = lyd_new_path(NULL, ctx, val->xpath, (void *) leaf, 0, 1);
+            root = lyd_new_path(NULL, ctx->libyang_ctx, val->xpath, (void *) leaf, 0, 1);
         }
         if (leaf) {
             free(leaf);
@@ -866,36 +891,49 @@ sr_created_operation(iter_change_t **p_iter, pthread_rwlock_t *iter_lock, size_t
     pthread_rwlock_unlock(iter_lock);
 
     struct ly_set *set = lyd_find_path(root, create_val->xpath);
-    CHECK_NULL(set, &rc, cleanup, "failed lyd_find_path with path", create_val->xpath);
+    CHECK_NULL(set, &rc, cleanup, "failed lyd_find_path with path %s", create_val->xpath);
 
-    char *data = NULL;
-    int len = 1000;
-    data = malloc(sizeof(*data) * len);
+    data = malloc(sizeof(*data) * SNABB_MESSAGE_MAX);
+    CHECK_NULL_MSG(data, &rc, cleanup, "failed to allocate memory");
     *data = '\0';
 
-    lyd_to_snabb_json((*set->set.d)->child, data, len);
+    lyd_to_snabb_json((*set->set.d)->child, data, SNABB_MESSAGE_MAX);
 
     // snabb xpath can't have leafs at the end
-    char *snabb_xpath = sr_xpath_to_snabb_no_end_keys(xpath);
-    INF("\ncreated %s %s\n", snabb_xpath, data);
-    free(snabb_xpath);
-    free(data);
+    snabb_xpath = sr_xpath_to_snabb_no_end_keys(xpath);
+    CHECK_NULL_MSG(snabb_xpath, &rc, cleanup, "failed to allocate memory");
+
+    int len = 47 + strlen(snabb_xpath) + strlen(data) + strlen(ctx->yang_model);
+    message = malloc(sizeof(*message) * len);
+    CHECK_NULL_MSG(message, &rc, cleanup, "failed to allocate memory");
+    snprintf(message, len, "add-config {path '%s'; config '%s'; schema %s;}", snabb_xpath, data, ctx->yang_model);
+
+    /* send to socket */
+    INF_MSG("send to socket");
+    rc = socket_send(ctx, message, NULL, false, false);
+    CHECK_RET(rc, cleanup, "failed to send message to snabb socket: %s", sr_strerror(rc));
 
 cleanup:
+    if (message) {
+        free(message);
+    }
+    if (data) {
+        free(data);
+    }
+    if (snabb_xpath) {
+        free(snabb_xpath);
+    }
     if (set) {
         ly_set_free(set);
     }
     if (root) {
         lyd_free_withsiblings(root);
     }
-    if (ctx) {
-        ly_ctx_destroy(ctx, NULL);
-    }
     return rc;
 }
 
 int
-xpaths_to_snabb_socket(iter_change_t **p_iter, pthread_rwlock_t *iter_lock, size_t begin, size_t end) {
+xpaths_to_snabb_socket(global_ctx_t *ctx, iter_change_t **p_iter, pthread_rwlock_t *iter_lock, size_t begin, size_t end) {
     iter_change_t *iter = *p_iter;
     sr_change_oper_t oper;
     sr_val_t *tmp_val = NULL;
@@ -913,14 +951,14 @@ xpaths_to_snabb_socket(iter_change_t **p_iter, pthread_rwlock_t *iter_lock, size
     pthread_rwlock_unlock(iter_lock);
 
     if (SR_OP_MODIFIED == oper) {
-        rc = sr_modified_operation(tmp_val);
+        rc = sr_modified_operation(ctx, tmp_val);
     } else if (SR_OP_DELETED == oper) {
         /* snabb allows remove operations only on arrays and tables, list and leaf-list */
         if (tmp_val->type == SR_LIST_T) {
-            rc = sr_deleted_operation(tmp_val);
+            rc = sr_deleted_operation(ctx, tmp_val);
         }
     } else {
-        rc = sr_created_operation(p_iter, iter_lock, begin, end);
+        rc = sr_created_operation(ctx, p_iter, iter_lock, begin, end);
     }
     CHECK_RET(rc, cleanup, "failed to run operation: %s", sr_strerror(rc));
 

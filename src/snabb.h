@@ -36,17 +36,10 @@
 
 char ch[SNABB_SOCKET_MAX];
 
-typedef struct snabb_transform_ctx_s {
-    struct ly_ctx *ly_ctx;
-    char *json_msg;
-    char *snabb_msg;
-} snabb_transform_ctx_t;
-
 typedef struct global_ctx_s {
     const char *yang_model;
     struct ly_ctx *libyang_ctx;
     const struct lys_module *module;
-    snabb_transform_ctx_t tr_ctx[THREADS];
     int socket_fd;
     char socket_path[UNIX_PATH_MAX];
     sr_subscription_ctx_t *sub;

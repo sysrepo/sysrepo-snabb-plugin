@@ -36,6 +36,6 @@ int snabb_socket_reconnect(global_ctx_t *);
 int snabb_state_data_to_sysrepo(global_ctx_t *, char *, sr_val_t **, size_t *);
 bool is_new_snabb_command(iter_change_t *, iter_change_t *);
 
-int xpaths_to_snabb_socket(iter_change_t **, pthread_rwlock_t *, size_t, size_t);
+int xpaths_to_snabb_socket(global_ctx_t *, iter_change_t **, pthread_rwlock_t *, size_t, size_t);
 
 #endif /* TRANSFORM_H */
