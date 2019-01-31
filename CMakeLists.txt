@@ -5,18 +5,18 @@ set(CMAKE_C_FLAGS         "${CMAKE_C_FLAGS} -Wall -Wpedantic -std=gnu11")
 set(CMAKE_C_FLAGS_RELEASE "-DNDEBUG -O2")
 set(CMAKE_C_FLAGS_DEBUG   "-g -O0")
 
-set(YANG_MODEL "snabb-softwire-v1" CACHE STRING "YANG model to use.")
+set(YANG_MODEL "snabb-softwire-v2" CACHE STRING "YANG model to use.")
 set(PLUGIN 0 CACHE BOOL "Build a plugin.")
 set(LEAF_LIST 1 CACHE BOOL "YANG model has a leaf-list in configuration.")
+set(THREADS 4 CACHE INTERNAL "Number of threads to use")
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/CMakeModules/")
 
 set(SOURCES
 	cfg_parse/cfg_parse.c
-	src/cfg.c
+	src/libyang.c
 	src/snabb.c
-	src/xpath.c
-	src/parse.c
+	src/cfg.c
 	src/transform.c)
 
 # git SHA1 hash

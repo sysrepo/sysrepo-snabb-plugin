@@ -27,18 +27,17 @@
 #include <sysrepo/plugins.h>
 #include <pthread.h>
 
-#include "config.h"
-#include "snabb.h"
-#include "parse.h"
 #include "common.h"
+#include "snabb.h"
 #include "transform.h"
+#include "libyang.h"
+#include "config.h"
 #include "cfg.h"
-#include "version.h"
 
 const char *YANG_MODEL = YANG;
 
 static int
-parse_config(sr_session_ctx_t *session, const char *module_name, ctx_t *ctx, sr_notif_event_t event) {
+parse_config(sr_session_ctx_t *session, const char *module_name, global_ctx_t *ctx, sr_notif_event_t event) {
     sr_change_iter_t *it = NULL;
     iter_change_t *iter_change = NULL;
     iter_change_t **p_iter_change = NULL;
@@ -62,9 +61,11 @@ parse_config(sr_session_ctx_t *session, const char *module_name, ctx_t *ctx, sr_
     size_t iter_change_size = 10;
     iter_cnt = 0;
     iter_change = calloc(iter_change_size, sizeof(*iter_change));
-    CHECK_NULL_MSG(iter_change, &rc, error, "failed to allocate memory");
-    p_iter_change = &iter_change;
+    if (iter_change) {
+        p_iter_change = &iter_change;
+    }
     pthread_rwlock_unlock(&iter_lock);
+    CHECK_NULL_MSG(iter_change, &rc, error, "failed to allocate memory");
 
     snprintf(xpath, XPATH_MAX_LEN, "/%s:*", module_name);
 
@@ -95,13 +96,12 @@ parse_config(sr_session_ctx_t *session, const char *module_name, ctx_t *ctx, sr_
             pthread_rwlock_wrlock(&iter_lock);
             iter_change_size *= 4;
             iter_change = realloc(iter_change, sizeof(*iter_change) * iter_change_size);
-            CHECK_NULL_MSG(iter_change, &rc, error, "failed to allocate memory");
             p_iter_change = &iter_change;
             pthread_rwlock_unlock(&iter_lock);
+            CHECK_NULL_MSG(iter_change, &rc, error, "failed to allocate memory");
         }
-        CHECK_NULL_MSG(iter_change, &rc, error, "failed to allocate memory");
     }
-    rc = xpaths_to_snabb_socket(p_iter_change, &iter_lock, prev, iter_cnt);
+    //rc = xpaths_to_snabb_socket(p_iter_change, &iter_lock, prev, iter_cnt);
 
     //rc = sr_to_snabb_worker(p_iter_change, &iter, &iter_cnt, iter_lock);
     //CHECK_RET(rc, error, "failed execute all operations: %s", sr_strerror(rc));
@@ -125,7 +125,7 @@ error:
 static int
 module_change_cb(sr_session_ctx_t *session, const char *module_name, sr_notif_event_t event, void *private_ctx) {
     int rc = SR_ERR_OK;
-    ctx_t *ctx = private_ctx;
+    global_ctx_t *ctx = private_ctx;
     INF("%s configuration has changed.", ctx->yang_model);
 
     ctx->sess = session;
@@ -165,7 +165,7 @@ state_data_cb(const char *xpath, sr_val_t **values, size_t *values_cnt, uint64_t
 {
     int rc = SR_ERR_OK;
 
-    ctx_t *ctx = private_ctx;
+    global_ctx_t *ctx = private_ctx;
     rc = snabb_state_data_to_sysrepo(ctx, (char *) xpath, values, values_cnt);
     CHECK_RET(rc, error, "failed to load state data: %s", sr_strerror(rc));
 
@@ -178,7 +178,7 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
     sr_subscription_ctx_t *subscription = NULL;
     char xpath[XPATH_MAX_LEN] = {0};
     int rc = SR_ERR_OK;
-    ctx_t *ctx = NULL;
+    global_ctx_t *ctx = NULL;
 
     ctx = malloc(sizeof *ctx);
     ctx->yang_model = YANG_MODEL;
@@ -194,9 +194,6 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
 
     /* set subscription as our private context */
     *private_ctx = ctx;
-
-    /* initialize action list */
-    LIST_INIT(&head);
 
     /* parse the yang model */
     INF("Parse yang model %s with libyang", ctx->yang_model);
@@ -246,7 +243,7 @@ sr_plugin_cleanup_cb(sr_session_ctx_t *session, void *private_ctx) {
         return;
     }
     /* subscription was set as our private context */
-    ctx_t *ctx = private_ctx;
+    global_ctx_t *ctx = private_ctx;
 
     /* clean config file context */
     clean_cfg(ctx->cfg);
