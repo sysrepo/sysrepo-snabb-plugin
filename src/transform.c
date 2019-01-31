@@ -450,9 +450,10 @@ snabb_state_data_to_sysrepo(global_ctx_t *ctx, char *xpath, sr_val_t **values, s
     int cnt = 0;
 
     CHECK_RET(rc, error, "failed to format xpath: %s", sr_strerror(rc));
-    snprintf(message, SNABB_MESSAGE_MAX, "get-state {path '%s'; schema %s;}", sr_xpath_to_snabb(xpath), ctx->yang_model);
+    char *snabb_xpath = sr_xpath_to_snabb(xpath);
+    snprintf(message, SNABB_MESSAGE_MAX, "get-state {path '%s'; schema %s;}", snabb_xpath, ctx->yang_model);
+    free(snabb_xpath);
 
-    INF("%s", message);
     /* send to socket */
     INF_MSG("send to socket");
     rc = socket_send(ctx, message, &response, true, false);
@@ -560,7 +561,6 @@ snabb_datastore_to_sysrepo(global_ctx_t *ctx) {
 
     snprintf(message, SNABB_MESSAGE_MAX, "get-config {path '/'; print-default 'true'; schema %s;}", ctx->yang_model);
 
-    INF("%s", message);
     /* send to socket */
     INF_MSG("send to socket");
     rc = socket_send(ctx, message, &response, true, false);
@@ -771,7 +771,9 @@ sr_modified_operation(sr_val_t *val) {
     int rc = SR_ERR_OK;
 
     char *leaf = sr_val_to_str(val);
-    INF("\nmodified %s %s", sr_xpath_to_snabb(val->xpath), leaf);
+    char *snabb_xpath = sr_xpath_to_snabb(val->xpath);
+    INF("\nmodified %s %s\n", snabb_xpath, leaf);
+    free(snabb_xpath);
     if (leaf) free(leaf);
 
     return rc;
@@ -781,7 +783,9 @@ int
 sr_deleted_operation(sr_val_t *val) {
     int rc = SR_ERR_OK;
 
-    INF("\ndelete %s", sr_xpath_to_snabb(val->xpath));
+    char *snabb_xpath = sr_xpath_to_snabb(val->xpath);
+    INF("\ndelete %s\n", snabb_xpath);
+    free(snabb_xpath);
 
     return rc;
 }
@@ -815,7 +819,6 @@ lyd_to_snabb_json(struct lyd_node *node, char *message, int len) {
     }
 
     while (node) {
-        printf("node %s\n", node->schema->name);
         if (node->child &&
             (node->schema->flags == LYS_CONTAINER || node->schema->flags == LYS_LIST || node->schema->flags == LYS_CHOICE)) {
             strncat(message, node->schema->name, len);
@@ -873,7 +876,9 @@ sr_created_operation(iter_change_t **p_iter, pthread_rwlock_t *iter_lock, size_t
     lyd_to_snabb_json((*set->set.d)->child, data, len);
 
     // snabb xpath can't have leafs at the end
-    INF("\ncreated %s %s", sr_xpath_to_snabb_no_end_keys(xpath), data);
+    char *snabb_xpath = sr_xpath_to_snabb_no_end_keys(xpath);
+    INF("\ncreated %s %s\n", snabb_xpath, data);
+    free(snabb_xpath);
     free(data);
 
 cleanup:

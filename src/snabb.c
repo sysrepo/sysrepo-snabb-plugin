@@ -85,6 +85,7 @@ parse_config(sr_session_ctx_t *session, const char *module_name, global_ctx_t *c
             INF("cahnge prev %zd current %zd", prev, iter_cnt);
             if (iter_cnt) {
                 rc = xpaths_to_snabb_socket(p_iter_change, &iter_lock, prev, iter_cnt);
+                CHECK_RET(rc, error, "failed xpaths_to_snabb_socket: %s", sr_strerror(rc));
             }
             prev = iter_cnt;
         }
@@ -101,10 +102,8 @@ parse_config(sr_session_ctx_t *session, const char *module_name, global_ctx_t *c
             CHECK_NULL_MSG(iter_change, &rc, error, "failed to allocate memory");
         }
     }
-    //rc = xpaths_to_snabb_socket(p_iter_change, &iter_lock, prev, iter_cnt);
-
-    //rc = sr_to_snabb_worker(p_iter_change, &iter, &iter_cnt, iter_lock);
-    //CHECK_RET(rc, error, "failed execute all operations: %s", sr_strerror(rc));
+    rc = xpaths_to_snabb_socket(p_iter_change, &iter_lock, prev, iter_cnt);
+    CHECK_RET(rc, error, "failed xpaths_to_snabb_socket: %s", sr_strerror(rc));
 
 error:
     if (NULL != it) {
