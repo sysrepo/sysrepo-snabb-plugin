@@ -1158,6 +1158,67 @@ error:
     }
 }
 
+char *
+sr_xpath_to_snabb_no_end_keys(char *xpath) {
+    char *node = NULL;
+    sr_xpath_ctx_t state = {0,0,0,0};
+    int rc = SR_ERR_OK;
+
+    /* snabb xpath is always smaller than sysrepo's xpath */
+    char *tmp = strdup(xpath);
+    int len = strlen(xpath);
+
+    CHECK_NULL_MSG(tmp, &rc, error, "failed to allocate memory");
+    *tmp = '\0'; // init xpath string
+
+    node = sr_xpath_next_node(xpath, &state);
+    CHECK_NULL_MSG(node, &rc, error, "failed sr_xpath_next_node");
+
+    while(true) {
+        strncat(tmp, "/", len);
+        if (NULL != node) {
+            strncat(tmp, node, len);
+        }
+
+        int current_pos = strlen(tmp);
+        while(true) {
+            char *key, *value;
+            /* iterate over key value pairs in xpath */
+            key = sr_xpath_next_key_name(NULL, &state);
+            if (NULL == key) {
+                break;
+            }
+            strncat(tmp, "[", len);
+            strncat(tmp, key, len);
+            strncat(tmp, "=", len);
+            value = sr_xpath_next_key_value(NULL, &state);
+            strncat(tmp, value, len);
+            strncat(tmp, "]", len);
+        }
+        /* iterate over nodes in xpath */
+        node = sr_xpath_next_node(NULL, &state);
+
+        if (NULL == node) {
+            /* remove keys if they exists in the last node
+               when adding list's in snabb you can't have keys in the xpath */
+            if (tmp[strlen(tmp) - 1] == ']') {
+                tmp[current_pos] = '\0';
+            }
+            break;
+        }
+    }
+
+error:
+    sr_xpath_recover(&state);
+    if (rc == SR_ERR_OK) {
+        return tmp;
+    } else {
+        free(tmp);
+        return NULL;
+    }
+}
+
+
 int
 sr_modified_operation(sr_val_t *val) {
     int rc = SR_ERR_OK;
@@ -1207,7 +1268,8 @@ lyd_to_snabb_json(struct lyd_node *node, char *message, int len) {
     }
 
     while (node && node->schema) {
-        if (node->schema->flags == LYS_CONTAINER || node->schema->flags == LYS_LIST) {
+        if (node->child &&
+            (node->schema->flags == LYS_CONTAINER || node->schema->flags == LYS_LIST || node->schema->flags == LYS_CHOICE)) {
             strncat(message, node->schema->name, len);
             strncat(message, " { ", len);
             lyd_to_snabb_json(node->child, message, 1000);
@@ -1262,7 +1324,7 @@ sr_created_operation(iter_change_t **p_iter, pthread_rwlock_t *iter_lock, size_t
     lyd_to_snabb_json((*set->set.d)->child, data, len);
 
     // snabb xpath can't have leafs at the end
-    INF("\ncreated %s %s", sr_xpath_to_snabb(xpath), data);
+    INF("\ncreated %s %s", sr_xpath_to_snabb_no_end_keys(xpath), data);
     free(data);
 
     ly_set_free(set);
