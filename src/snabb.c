@@ -174,17 +174,18 @@ error:
 
 int
 sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
-    sr_subscription_ctx_t *subscription = NULL;
-    char xpath[XPATH_MAX_LEN] = {0};
     int rc = SR_ERR_OK;
+    char xpath[XPATH_MAX_LEN] = {0};
     global_ctx_t *ctx = NULL;
 
     ctx = malloc(sizeof *ctx);
+    CHECK_NULL_MSG(ctx, &rc, error, "failed malloc global context");
+
+    ctx->cfg = NULL;
     ctx->yang_model = YANG_MODEL;
     ctx->libyang_ctx = NULL;
-    ctx->sub = subscription;
+    ctx->sub = NULL;
     ctx->sess = session;
-    ctx->running_sess = session;
     ctx->socket_fd = -1;
 
     /* get snabb socket */
@@ -208,12 +209,12 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
     rc = sync_datastores(ctx);
     CHECK_RET(rc, error, "failed to apply sysrepo startup data to snabb: %s", sr_strerror(rc));
 
-    rc = sr_module_change_subscribe(session, ctx->yang_model, module_change_cb, ctx, 0, SR_SUBSCR_CTX_REUSE, &ctx->sub);
+    rc = sr_module_change_subscribe(ctx->sess, ctx->yang_model, module_change_cb, ctx, 0, SR_SUBSCR_CTX_REUSE, &ctx->sub);
     CHECK_RET(rc, error, "failed sr_module_change_subscribe: %s", sr_strerror(rc));
 
     if (0 != strcmp("ietf-softwire-br", ctx->yang_model)) {
         snprintf(xpath, XPATH_MAX_LEN, "/%s:softwire-state", ctx->yang_model);
-        rc = sr_dp_get_items_subscribe(session, xpath, state_data_cb, ctx, SR_SUBSCR_CTX_REUSE, &ctx->sub);
+        rc = sr_dp_get_items_subscribe(ctx->sess, xpath, state_data_cb, ctx, SR_SUBSCR_CTX_REUSE, &ctx->sub);
         CHECK_RET(rc, error, "failed sr_dp_get_items_subscribe: %s", sr_strerror(rc));
     }
 
@@ -238,17 +239,14 @@ error:
 
 void
 sr_plugin_cleanup_cb(sr_session_ctx_t *session, void *private_ctx) {
-    if (NULL == session || NULL == private_ctx) {
-        return;
-    }
     /* subscription was set as our private context */
     global_ctx_t *ctx = private_ctx;
 
-    /* clean config file context */
-    clean_cfg(ctx->cfg);
-
     /* clean snabb related context */
-    clear_context(ctx);
+    if (ctx) {
+        clear_context(ctx);
+    }
+
 }
 
 #ifndef PLUGIN
@@ -289,13 +287,10 @@ main() {
         sleep(1);  /* or do some more useful work... */
     }
 
-    sr_plugin_cleanup_cb(session, private_ctx);
 cleanup:
-    if (NULL != session) {
-        sr_session_stop(session);
-    }
-    if (NULL != connection) {
-        sr_disconnect(connection);
-    }
+    sr_plugin_cleanup_cb(session, private_ctx);
+
+    sr_session_stop(session);
+    sr_disconnect(connection);
 }
 #endif

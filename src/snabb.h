@@ -44,7 +44,6 @@ typedef struct global_ctx_s {
     char socket_path[UNIX_PATH_MAX];
     sr_subscription_ctx_t *sub;
     sr_session_ctx_t *sess;
-    sr_session_ctx_t *running_sess;
     sr_conn_ctx_t *startup_conn;
     sr_session_ctx_t *startup_sess;
     cfg_ctx *cfg;

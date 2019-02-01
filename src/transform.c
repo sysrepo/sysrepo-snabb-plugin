@@ -41,10 +41,6 @@
 #include "libyang.h"
 #include "transform.h"
 
-//int socket_send(global_ctx_t *ctx, char *message, sb_command_t command, char **response, sr_notif_event_t event, status_t *status);
-//int xpath_to_snabb(global_ctx_t *ctx, action_t *action, char **message);
-//int sysrepo_to_snabb(global_ctx_t *ctx, action_t *action);
-
 /* transform xpath to snabb compatible format
  * 1) remove yang model from xpath
  * 2) remove "'" from the key value
@@ -271,174 +267,6 @@ error:
 //error:
 //    return rc;
 //}
-//
-//int fill_list(sr_node_t *tree, char **message, int *len) {
-//    int rc = SR_ERR_OK;
-//
-//    if (NULL == tree) {
-//        return rc;
-//    }
-//
-//    while(true) {
-//        if (*len < XPATH_MAX_LEN + (int) strlen(*message)) {
-//            rc = double_message_size(message, len);
-//            CHECK_RET(rc, cleanup, "failed to double the buffer size: %s", sr_strerror(rc));
-//        }
-//        if (NULL == tree) {
-//            break;
-//        } else if (list_or_container(tree->type)) {
-//            //TODO check for error
-//            strncat(*message, tree->name, *len);
-//            strncat(*message, " { ", *len);
-//            rc = fill_list(tree->first_child, message, len);
-//            CHECK_RET(rc, cleanup, "failed fill_list: %s", sr_strerror(rc));
-//            strncat(*message, " } ", *len);
-//        } else {
-//            //TODO check for error
-//            strncat(*message, tree->name, *len);
-//            strncat(*message, " ", *len);
-//            char *value = sr_val_to_str((sr_val_t *) tree);
-//            strncat(*message, value, *len);
-//            free(value);
-//            strncat(*message, "; ", *len);
-//        }
-//        tree = tree->next;
-//    }
-//
-//cleanup:
-//    return rc;
-//}
-//
-//int
-//xpath_to_snabb(global_ctx_t *ctx, action_t *action, char **message) {
-//    int rc = SR_ERR_OK;
-//    int len = SNABB_MESSAGE_MAX;
-//    sr_node_t *trees = NULL;
-//
-//    *message = malloc(sizeof(**message) * len);
-//    CHECK_NULL_MSG(*message, &rc, error, "failed to allocate memory");
-//
-//    *message[0] = '\0';
-//
-//    long unsigned int tree_cnt = 0;
-//    rc = sr_get_subtrees(ctx->sess, action->xpath, SR_GET_SUBTREE_DEFAULT, &trees, &tree_cnt);
-//    if (SR_ERR_NOT_FOUND == rc && SR_EV_ABORT == action->event) {
-//        INF("No items found in sysrepo datastore for xpath: %s", action->xpath);
-//        return SR_ERR_OK;
-//    }
-//    CHECK_RET(rc, error, "failed sr_get_subtrees: %s", sr_strerror(rc));
-//
-//    if (1 == tree_cnt) {
-//        if (true == list_or_container(trees[0].type)) {
-//            if (SR_LIST_T == trees[0].type) {
-//                strncat(*message, " { ", len);
-//            }
-//            rc = fill_list(trees->first_child, message, &len);
-//            CHECK_RET(rc, error, "failed to create snabb configuration data: %s", sr_strerror(rc));
-//            if (SR_LIST_T == trees[0].type) {
-//                strncat(*message, " } ", len);
-//            }
-//        } else {
-//            char *value = sr_val_to_str((sr_val_t *) &trees[0]);
-//            strncat(*message, trees[0].name, len);
-//            strncat(*message, " ", len);
-//            strncat(*message, value, len);
-//            strncat(*message, ";", len);
-//            free(value);
-//        }
-//    } else {
-//        for (int i = 0; i < (int) tree_cnt; i++) {
-//            rc = fill_list(&trees[i], message, &len);
-//            CHECK_RET(rc, error, "failed to create snabb configuration data: %s", sr_strerror(rc));
-//        }
-//    }
-//
-//    sr_free_trees(trees, tree_cnt);
-//    return rc;
-//error:
-//    if (NULL != *message) {
-//        free(*message);
-//    }
-//    if (NULL != trees) {
-//        sr_free_trees(trees, tree_cnt);
-//    }
-//    return rc;
-//}
-//
-//int
-//sysrepo_to_snabb(global_ctx_t *ctx, action_t *action) {
-//    sb_command_t command;
-//    char *message = NULL;
-//    int  rc = SR_ERR_OK;
-//
-//    char *tmp = NULL;
-//    char **value = &tmp;
-//
-//    /* translate sysrepo operation to snabb command */
-//    switch(action->op) {
-//    case SR_OP_MODIFIED:
-//        //rc = format_xpath(action);
-//        CHECK_RET(rc, error, "failed to format xpath: %s", sr_strerror(rc));
-//
-//        message = malloc(sizeof(*message) * (SNABB_MESSAGE_MAX + strlen(action->snabb_xpath) + strlen(ctx->yang_model)));
-//        CHECK_NULL_MSG(message, &rc, error, "failed to allocate memory");
-//
-//        snprintf(message, SNABB_MESSAGE_MAX, "set-config {path '%s'; config '%s'; schema %s;}", action->snabb_xpath, action->value, ctx->yang_model);
-//        command = SB_SET;
-//        break;
-//    case SR_OP_CREATED:
-//        rc = xpath_to_snabb(ctx, action, value);
-//        CHECK_RET(rc, error, "failed xpath_to_snabb: %s", sr_strerror(rc));
-//        /* edge case, deleting all of leaf-list entries
-//         * check if value is empty string ""
-//         * and parent_type is LYS_LEAFLIST
-//         */
-//#ifdef LEAFLIST
-//        if (LYS_LEAFLIST == action->yang_type && 0 == strlen(*value)) {
-//            action->yang_type = LYS_UNKNOWN;
-//        }
-//#endif
-//        //rc = format_xpath(action);
-//
-//        CHECK_RET(rc, error, "failed to format xpath: %s", sr_strerror(rc));
-//
-//        int len = SNABB_MESSAGE_MAX + (int) strlen(action->snabb_xpath) + strlen(*value) + (int) strlen(ctx->yang_model);
-//        message = malloc(sizeof(*message) * len);
-//        CHECK_NULL_MSG(message, &rc, error, "failed to allocate memory");
-//
-//        if (action->type == SR_LIST_T) {
-//            snprintf(message, len, "add-config {path '%s'; config '%s'; schema %s;}", action->snabb_xpath, *value, ctx->yang_model);
-//        } else {
-//            snprintf(message, len, "set-config {path '%s'; config '%s'; schema %s;}", action->snabb_xpath, *value, ctx->yang_model);
-//        }
-//        free(*value);
-//        command = SB_ADD;
-//        break;
-//    case SR_OP_DELETED:
-//        //rc = format_xpath(action);
-//        CHECK_RET(rc, error, "failed to format xpath: %s", sr_strerror(rc));
-//
-//        message = malloc(sizeof(*message) * (SNABB_MESSAGE_MAX + strlen(action->snabb_xpath) + strlen(ctx->yang_model)));
-//        CHECK_NULL_MSG(message, &rc, error, "failed to allocate memory");
-//
-//        snprintf(message, SNABB_MESSAGE_MAX, "remove-config {path '%s'; schema %s;}", action->snabb_xpath, ctx->yang_model);
-//        command = SB_REMOVE;
-//        break;
-//    default:
-//        command = SB_SET;
-//    }
-//
-//    /* send to socket */
-//    INF_MSG("send to socket");
-//    rc = socket_send(ctx, message, command, NULL, action->event, &action->status);
-//    CHECK_RET(rc, error, "failed to send message to snabb socket: %s", sr_strerror(rc));
-//
-//error:
-//    if (NULL != message) {
-//        free(message);
-//    }
-//    return rc;
-//}
 
 int
 snabb_state_data_to_sysrepo(global_ctx_t *ctx, char *xpath, sr_val_t **values, size_t *values_cnt) {
@@ -619,16 +447,27 @@ error:
 
 void
 clear_context(global_ctx_t *ctx) {
-    sr_unsubscribe(ctx->running_sess, ctx->sub);
-
-    socket_close(ctx);
-
+    /* free libyang context */
     ly_ctx_destroy(ctx->libyang_ctx, NULL);
 
-    /* startup datastore */
+    /* close startup session */
     sr_session_stop(ctx->startup_sess);
+
+    /* close startup connection */
     sr_disconnect(ctx->startup_conn);
 
+    /* free sysrepo subscription */
+    sr_unsubscribe(ctx->sess, ctx->sub);
+
+    /* close snabb socket */
+    socket_close(ctx);
+
+    /* clean config file context */
+    if (ctx && ctx->cfg) {
+        clean_cfg(ctx->cfg);
+    }
+
+    /* free global context */
     INF("%s plugin cleanup finished.", ctx->yang_model);
     free(ctx);
 }
@@ -841,12 +680,14 @@ lyd_to_snabb_json(struct lyd_node *node, char *message, int len) {
         strncat(message, "{ ", len);
     }
 
+    //TODO cher message size and double it
+
     while (node) {
         if (node->child &&
             (node->schema->flags == LYS_CONTAINER || node->schema->flags == LYS_LIST || node->schema->flags == LYS_CHOICE)) {
             strncat(message, node->schema->name, len);
             strncat(message, " { ", len);
-            lyd_to_snabb_json(node->child, message, 1000);
+            lyd_to_snabb_json(node->child, message, len);
             strncat(message, " } ", len);
         } else {
             strncat(message, node->schema->name, len);
