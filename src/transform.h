@@ -23,8 +23,18 @@
 #define TRANSFORM_H
 
 #include <sysrepo.h>
+#include <pthread.h>
 
 #include "snabb.h"
+
+typedef struct thread_job_s {
+    global_ctx_t *ctx;
+    iter_change_t **p_iter;
+    pthread_rwlock_t *iter_lock;
+    size_t begin;
+    size_t end;
+    int *rc;
+} thread_job_t;
 
 int load_startup_datastore(global_ctx_t *);
 int sync_datastores(global_ctx_t *);
@@ -36,6 +46,6 @@ int snabb_socket_reconnect(global_ctx_t *);
 int snabb_state_data_to_sysrepo(global_ctx_t *, char *, sr_val_t **, size_t *);
 bool is_new_snabb_command(iter_change_t *, iter_change_t *);
 
-int xpaths_to_snabb_socket(global_ctx_t *, iter_change_t **, pthread_rwlock_t *, size_t, size_t);
+void xpaths_to_snabb_socket(void *input);
 
 #endif /* TRANSFORM_H */

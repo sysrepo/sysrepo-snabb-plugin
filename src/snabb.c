@@ -33,6 +33,7 @@
 #include "libyang.h"
 #include "config.h"
 #include "cfg.h"
+#include "thpool.h"
 
 const char *YANG_MODEL = YANG;
 
@@ -49,6 +50,9 @@ parse_config(sr_session_ctx_t *session, const char *module_name, global_ctx_t *c
     iter_change = NULL;
     char xpath[XPATH_MAX_LEN] = {0,};
     pthread_rwlock_t iter_lock;
+
+    /* create threads */
+	threadpool thpool = thpool_init(THREADS);
 
     rc = pthread_rwlock_init(&iter_lock, NULL);
     if (0 != rc) {
@@ -76,16 +80,25 @@ parse_config(sr_session_ctx_t *session, const char *module_name, global_ctx_t *c
     }
 
     size_t prev = 0;
+    INF_MSG("start iterating over the changes");
     while (SR_ERR_OK == sr_get_change_next(session, it, &oper, &old_value, &new_value)) {
         iter_change[iter_cnt].old_val = old_value;
         iter_change[iter_cnt].new_val = new_value;
         iter_change[iter_cnt].oper = oper;
 
         if (is_new_snabb_command(&iter_change[iter_cnt], &iter_change[prev])) {
-            INF("cahnge prev %zd current %zd", prev, iter_cnt);
             if (iter_cnt) {
-                rc = xpaths_to_snabb_socket(ctx, p_iter_change, &iter_lock, prev, iter_cnt);
-                CHECK_RET(rc, error, "failed xpaths_to_snabb_socket: %s", sr_strerror(rc));
+                INF("cahnge prev %zd current %zd", prev, iter_cnt);
+                //thpool_add_work(thpool, (void *) xpaths_to_snabb_socket(ctx, p_iter_change, &iter_lock, prev, iter_cnt), NULL);
+                thread_job_t *job = (thread_job_t *) malloc(sizeof(thread_job_t));
+                CHECK_NULL_MSG(job, &rc, error, "failed to allocate memory");
+                job->ctx = ctx;
+                job->p_iter = p_iter_change;
+                job->iter_lock = &iter_lock;
+                job->begin = prev;
+                job->end = iter_cnt;
+                thpool_add_work(thpool, xpaths_to_snabb_socket, job);
+                //TODO check error
             }
             prev = iter_cnt;
         }
@@ -102,10 +115,21 @@ parse_config(sr_session_ctx_t *session, const char *module_name, global_ctx_t *c
             CHECK_NULL_MSG(iter_change, &rc, error, "failed to allocate memory");
         }
     }
-    rc = xpaths_to_snabb_socket(ctx, p_iter_change, &iter_lock, prev, iter_cnt);
-    CHECK_RET(rc, error, "failed xpaths_to_snabb_socket: %s", sr_strerror(rc));
+    //thpool_add_work(thpool, (void *) xpaths_to_snabb_socket, ctx, p_iter_change, &iter_lock, prev, iter_cnt);
+    thread_job_t *job = (thread_job_t *) malloc(sizeof(thread_job_t));
+    CHECK_NULL_MSG(job, &rc, error, "failed to allocate memory");
+    job->ctx = ctx;
+    job->p_iter = p_iter_change;
+    job->iter_lock = &iter_lock;
+    job->begin = prev;
+    job->end = iter_cnt;
+    thpool_add_work(thpool, xpaths_to_snabb_socket, job);
+    //TODO check error
 
 error:
+    thpool_wait(thpool);
+    thpool_destroy(thpool);
+
     if (NULL != it) {
         sr_free_change_iter(it);
     }
@@ -221,6 +245,12 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
     /* load config file */
     ctx->cfg = init_cfg_file();
     CHECK_NULL_MSG(ctx->cfg, &rc, error, "failed to parse cfg config file");
+
+    rc = pthread_rwlock_init(&ctx->snabb_lock, NULL);
+    if (0 != rc) {
+        ERR_MSG("failed to create snabb rwlock");
+        goto error;
+    }
 
     INF("%s plugin initialized successfully", ctx->yang_model);
 

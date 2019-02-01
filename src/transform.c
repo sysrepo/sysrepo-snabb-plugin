@@ -4,7 +4,7 @@
  * @brief A bridge for connecting snabb and sysrepo data plane.
  *
  * @copyright
- * Copyright (C) 2017 Deutsche Telekom AG.
+ * Copyright (C) 2019 Deutsche Telekom AG.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -166,9 +166,11 @@ error:
 
 
 void socket_close(global_ctx_t *ctx) {
+    pthread_rwlock_wrlock(&ctx->snabb_lock);
     if (-1 != ctx->socket_fd) {
         close(ctx->socket_fd);
     }
+    pthread_rwlock_unlock(&ctx->snabb_lock);
 }
 
 int socket_send(global_ctx_t *ctx, char *input, char **output, bool fetch, bool ignore_error) {
@@ -176,6 +178,8 @@ int socket_send(global_ctx_t *ctx, char *input, char **output, bool fetch, bool 
     int len = 0;
     int nbytes;
     char *buffer = NULL;
+    //TODO add large char array
+    char ch2[256];
 
     if (NULL == input) {
         return SR_ERR_INTERNAL;
@@ -193,8 +197,12 @@ int socket_send(global_ctx_t *ctx, char *input, char **output, bool fetch, bool 
     nbytes = snprintf(buffer, len, "%s\n%s", str, input);
 
     //TODO add timeout check
+    INF_MSG("lock snabb socket");
+    pthread_rwlock_wrlock(&ctx->snabb_lock);
     nbytes = write(ctx->socket_fd, buffer, nbytes);
     if ((int) strlen(buffer) != (int) nbytes) {
+        INF_MSG("unlock snabb socket");
+        pthread_rwlock_unlock(&ctx->snabb_lock);
         if (-1 == nbytes) {
             snabb_socket_reconnect(ctx);
             free(buffer);
@@ -209,13 +217,15 @@ int socket_send(global_ctx_t *ctx, char *input, char **output, bool fetch, bool 
     free(buffer);
     buffer = NULL;
 
-    nbytes = read(ctx->socket_fd, ch, SNABB_SOCKET_MAX);
-    ch[nbytes] = 0;
+    nbytes = read(ctx->socket_fd, ch2, 256);
+    ch2[nbytes] = 0;
+    INF_MSG("unlock snabb socket");
+    pthread_rwlock_unlock(&ctx->snabb_lock);
 
     /* count new lines */
     int counter = 0;
-    for (int i = 0; i < (int) strlen(ch); i++) {
-        if ('\n' == ch[i]) {
+    for (int i = 0; i < (int) strlen(ch2); i++) {
+        if ('\n' == ch2[i]) {
             counter++;
         }
     }
@@ -230,22 +240,22 @@ int socket_send(global_ctx_t *ctx, char *input, char **output, bool fetch, bool 
         goto failed;
     } else {
         INF("Operation:\n%s", input);
-        INF("Response:\n%s", ch);
+        INF("Response:\n%s", ch2);
     }
 
     if (fetch) {
-        *output = strdup(ch);
+        *output = strdup(ch2);
     }
 
     /* set null terminated string at the beggining */
-    ch[0] = '\0';
+    ch2[0] = '\0';
 
     return SR_ERR_OK;
 failed:
     if (ignore_error) {
         rc = SR_ERR_INTERNAL;
         WRN("Operation faild for:\n%s", input);
-        WRN("Respons:\n%s", ch);
+        WRN("Respons:\n%s", ch2);
     }
 error:
     if (NULL != buffer) {
@@ -448,6 +458,10 @@ error:
 void
 clear_context(global_ctx_t *ctx) {
     /* free libyang context */
+    if (!ctx) {
+        return;
+    }
+
     ly_ctx_destroy(ctx->libyang_ctx, NULL);
 
     /* close startup session */
@@ -463,9 +477,11 @@ clear_context(global_ctx_t *ctx) {
     socket_close(ctx);
 
     /* clean config file context */
-    if (ctx && ctx->cfg) {
+    if (ctx->cfg) {
         clean_cfg(ctx->cfg);
     }
+
+    pthread_rwlock_destroy(&ctx->snabb_lock);
 
     /* free global context */
     INF("%s plugin cleanup finished.", ctx->yang_model);
@@ -510,6 +526,7 @@ snabb_socket_reconnect(global_ctx_t *ctx) {
     int BUFSIZE = 256;
     char buf[BUFSIZE];
 
+    pthread_rwlock_wrlock(&ctx->snabb_lock);
     // close existing socket if exists
     if (-1 != ctx->socket_fd) {
         close(ctx->socket_fd);
@@ -518,7 +535,8 @@ snabb_socket_reconnect(global_ctx_t *ctx) {
     // extract pid from the command "snabb ps"
     if ((fp = popen("exec bash -c 'snabb ps | head -n1 | cut -d \" \" -f1'", "r")) == NULL) {
         ERR_MSG("Error opening pipe!");
-        return SR_ERR_INTERNAL;
+        rc = SR_ERR_INTERNAL;
+        goto error;
     }
 
     if (fgets(buf, BUFSIZE, fp) != NULL) {
@@ -546,16 +564,16 @@ snabb_socket_reconnect(global_ctx_t *ctx) {
     rc = connect(ctx->socket_fd, (struct sockaddr *) &address, sizeof(struct sockaddr_un));
     CHECK_RET_MSG(rc, error, "failed connection to snabb socket");
 
+    pthread_rwlock_unlock(&ctx->snabb_lock);
     return SR_ERR_OK;
 error:
     if (fp) {
         pclose(fp);
     }
     socket_close(ctx);
+    pthread_rwlock_unlock(&ctx->snabb_lock);
     return SR_ERR_INTERNAL;
 }
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 bool
 is_new_snabb_command(iter_change_t *iter, iter_change_t *prev) {
@@ -773,36 +791,42 @@ cleanup:
     return rc;
 }
 
-int
-xpaths_to_snabb_socket(global_ctx_t *ctx, iter_change_t **p_iter, pthread_rwlock_t *iter_lock, size_t begin, size_t end) {
-    iter_change_t *iter = *p_iter;
+void
+xpaths_to_snabb_socket(void *input) {
+    int rc = SR_ERR_OK;
+    thread_job_t *th_ctx = (thread_job_t *) input;
+    CHECK_NULL_MSG(th_ctx, &rc, cleanup, "input is NULL");
+
+    iter_change_t *iter = *th_ctx->p_iter;
     sr_change_oper_t oper;
     sr_val_t *tmp_val = NULL;
-    int rc = SR_ERR_OK;
 
-    pthread_rwlock_rdlock(iter_lock);
-    oper = iter[begin].oper;
+    pthread_rwlock_rdlock(th_ctx->iter_lock);
+    oper = iter[th_ctx->begin].oper;
     if (SR_OP_DELETED == oper) {
-        tmp_val = iter[begin].old_val;
+        tmp_val = iter[th_ctx->begin].old_val;
     } else if (SR_OP_MODIFIED == oper) {
-        tmp_val = iter[begin].new_val;
+        tmp_val = iter[th_ctx->begin].new_val;
     } else {
-        tmp_val = iter[begin].new_val;
+        tmp_val = iter[th_ctx->begin].new_val;
     }
-    pthread_rwlock_unlock(iter_lock);
+    pthread_rwlock_unlock(th_ctx->iter_lock);
 
     if (SR_OP_MODIFIED == oper) {
-        rc = sr_modified_operation(ctx, tmp_val);
+        rc = sr_modified_operation(th_ctx->ctx, tmp_val);
     } else if (SR_OP_DELETED == oper) {
         /* snabb allows remove operations only on arrays and tables, list and leaf-list */
         if (tmp_val->type == SR_LIST_T) {
-            rc = sr_deleted_operation(ctx, tmp_val);
+            rc = sr_deleted_operation(th_ctx->ctx, tmp_val);
         }
     } else {
-        rc = sr_created_operation(ctx, p_iter, iter_lock, begin, end);
+        rc = sr_created_operation(th_ctx->ctx, th_ctx->p_iter, th_ctx->iter_lock, th_ctx->begin, th_ctx->end);
     }
     CHECK_RET(rc, cleanup, "failed to run operation: %s", sr_strerror(rc));
 
 cleanup:
-    return rc;
+    INF("error code is %s", sr_strerror(rc));
+    if (th_ctx) {
+        free(th_ctx);
+    }
 }

@@ -17,6 +17,7 @@ set(SOURCES
 	src/libyang.c
 	src/snabb.c
 	src/cfg.c
+	src/thpool.c
 	src/transform.c)
 
 # git SHA1 hash
