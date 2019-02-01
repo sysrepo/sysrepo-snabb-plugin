@@ -46,6 +46,7 @@ typedef struct global_ctx_s {
     sr_session_ctx_t *sess;
     sr_conn_ctx_t *startup_conn;
     sr_session_ctx_t *startup_sess;
+    pthread_rwlock_t snabb_lock;
     cfg_ctx *cfg;
 } global_ctx_t;
 
