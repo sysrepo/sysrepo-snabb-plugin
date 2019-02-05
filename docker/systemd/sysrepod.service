@@ -1,0 +1,17 @@
+[Unit]
+Description=Sysrepo YANG configuration storage and management
+After=syslog.target network.target
+
+[Service]
+Type=forking
+ExecStart=/usr/local/bin/sysrepod -l 2
+PIDFile=/var/run/sysrepod.pid
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=yes
+ProtectHome=yes
+SystemCallArchitectures=native
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

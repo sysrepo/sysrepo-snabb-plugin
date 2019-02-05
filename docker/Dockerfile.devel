@@ -1,0 +1,171 @@
+FROM ubuntu:18.04
+
+MAINTAINER mislav.novakovic@sartura.hr
+
+RUN \
+      apt-get update && apt-get install -y \
+      git \
+      cmake \
+      build-essential \
+      vim \
+      supervisor \
+      libpcre3-dev \
+      pkg-config \
+      libavl-dev \
+      libev-dev \
+      libprotobuf-c-dev \
+      protobuf-c-compiler \
+      libssh-dev \
+      libssl-dev \
+      swig \
+      python-dev
+
+# add netconf user
+RUN \
+      adduser --system netconf && \
+      echo "netconf:netconf" | chpasswd
+
+# set root password
+RUN \
+      echo "root:root" | chpasswd
+
+# generate ssh keys for netconf user
+RUN \
+      mkdir -p /home/netconf/.ssh && \
+      ssh-keygen -A && \
+      ssh-keygen -t dsa -P '' -f /home/netconf/.ssh/id_dsa && \
+      cat /home/netconf/.ssh/id_dsa.pub > /home/netconf/.ssh/authorized_keys
+
+# use /opt/dev as working directory
+RUN mkdir /opt/dev
+WORKDIR /opt/dev
+
+# libyang
+RUN \
+      git clone https://github.com/CESNET/libyang.git && \
+      cd libyang && mkdir build && cd build && \
+      git checkout devel && \
+      cmake -DCMAKE_BUILD_TYPE:String="Release" -DENABLE_BUILD_TESTS=OFF .. && \
+      make -j2 && \
+      make install && \
+      ldconfig
+
+# sysrepo
+RUN \
+      git clone https://github.com/sysrepo/sysrepo.git && \
+      cd sysrepo && mkdir build && cd build && \
+      git checkout devel && \
+      cmake -DCMAKE_BUILD_TYPE:String="Release" -DENABLE_TESTS=OFF -DREPOSITORY_LOC:PATH=/etc/sysrepo \
+      -DGEN_LANGUAGE_BINDINGS=OFF -DENABLE_NACM=OFF -DBUILD_EXAMPLES=OFF \
+      -DREQUEST_TIMEOUT=300 -DCOMMIT_VERIFY_TIMEOUT=300 \
+      -DGET_SUBTREE_CHUNK_CHILD_LIMIT=200000 \
+      .. && \
+      make -j2 && \
+      make install && \
+      ldconfig
+
+# libnetconf2
+RUN \
+      git clone https://github.com/CESNET/libnetconf2.git && \
+      cd libnetconf2 && mkdir build && cd build && \
+      git checkout devel && \
+      cmake -DCMAKE_BUILD_TYPE:String="Release" -DENABLE_BUILD_TESTS=OFF \
+      -DREAD_INACTIVE_TIMEOUT=300 -DREAD_ACTIVE_TIMEOUT=300 \
+      .. && \
+      make -j2 && \
+      make install && \
+      ldconfig
+
+# keystore
+RUN \
+      cd /opt/dev && \
+      git clone https://github.com/CESNET/Netopeer2.git && \
+      cd Netopeer2 && \
+      cd keystored && mkdir build && cd build && \
+      git checkout devel-server && \
+      cmake -DCMAKE_BUILD_TYPE:String="Release" .. && \
+      make -j2 && \
+      make install && \
+      ldconfig
+
+# netopeer2
+RUN \
+      cd /opt/dev && \
+      cd Netopeer2/server && mkdir build && cd build && \
+      cmake -DCMAKE_BUILD_TYPE:String="Release" .. && \
+      make -j2 && \
+      make install && \
+      cd ../../cli && mkdir build && cd build && \
+      cmake -DCMAKE_BUILD_TYPE:String="Release" .. && \
+      make -j2 && \
+      make install
+
+# sysrepo-snabb-plugin
+RUN \
+      git clone https://github.com/sysrepo/sysrepo-snabb-plugin.git && \
+      cd sysrepo-snabb-plugin && mkdir build && cd build && \
+      git checkout devel && \
+      cmake -DCMAKE_BUILD_TYPE:String="Release" -DPLUGIN:BOOL=ON -DYANG_MODEL:String="snabb-softwire-v2" .. && \
+      make -j2 && \
+      make install && \
+      ldconfig
+
+
+# snabb
+RUN \
+      git clone https://github.com/Igalia/snabb.git && \
+      cd snabb && \
+      git checkout lwaftr && \
+      make -j2 && \
+      make install && \
+      ldconfig
+
+RUN \
+      apt-get update && apt-get install -y \
+      # general tools
+      systemd \
+      valgrind \
+      gdb
+
+# install snabb YANG models
+RUN \
+      sysrepoctl --install --yang=/opt/dev/snabb/src/lib/yang/snabb-softwire-v2.yang
+
+# setup systemd
+ENV \
+      container docker
+RUN \
+      apt-get update && apt-get install -y systemd apt-utils && \
+      (cd /lib/systemd/system/sysinit.target.wants/; for i in *; do [ $i == systemd-tmpfiles-setup.service ] || rm -f $i; done) && \
+      rm -f /lib/systemd/system/multi-user.target.wants/* && \
+      rm -f /etc/systemd/system/*.wants/* && \
+      rm -f /lib/systemd/system/local-fs.target.wants/* && \
+      rm -f /lib/systemd/system/sockets.target.wants/*udev* && \
+      rm -f /lib/systemd/system/sockets.target.wants/*initctl* && \
+      rm -f /lib/systemd/system/basic.target.wants/* && \
+      rm -f /lib/systemd/system/anaconda.target.wants/*
+
+VOLUME [ “/sys/fs/cgroup” ]
+CMD [“/sbin/init”]
+
+# setup systemd
+RUN \
+      echo "export PATH=\$PATH:/opt/scripts" >> /root/.bashrc
+
+RUN \
+      mkdir -p /opt/snabb/conf
+
+COPY \
+      ./scripts/lwaftr.sh /opt/snabb/conf
+
+COPY \
+      ./systemd/* /lib/systemd/system/
+
+RUN \
+      systemctl enable sysrepod.service && \
+      systemctl enable sysrepo-plugind.service && \
+      systemctl enable netopeer2-server.service && \
+      systemctl enable lwaftr.service
+
+ENV EDITOR vim
+EXPOSE 830
