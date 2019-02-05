@@ -1,0 +1,522 @@
+[login]
+
+address = "[::]:830"
+username = "root"
+password = "root"
+enabled = true
+
+[[test]]
+
+Message = "set the inital config"
+
+XMLRequestBody = """
+<edit-config>
+<target><running/></target>
+	<config xmlns:op='urn:ietf:params:xml:ns:netconf:base:1.0'>
+        <softwire-config xmlns="snabb:softwire-v2">
+          <external-interface>
+            <mtu>1460</mtu>
+            <mru>1460</mru>
+            <allow-incoming-icmp>false</allow-incoming-icmp>
+            <error-rate-limiting>
+              <period>2</period>
+              <packets>600000</packets>
+            </error-rate-limiting>
+            <reassembly>
+              <max-fragments-per-packet>40</max-fragments-per-packet>
+              <max-packets>20000</max-packets>
+            </reassembly>
+          </external-interface>
+          <internal-interface>
+            <mtu>1500</mtu>
+            <mru>1460</mru>
+            <allow-incoming-icmp>false</allow-incoming-icmp>
+            <error-rate-limiting>
+              <period>2</period>
+              <packets>600000</packets>
+            </error-rate-limiting>
+            <reassembly>
+              <max-fragments-per-packet>40</max-fragments-per-packet>
+              <max-packets>20000</max-packets>
+            </reassembly>
+            <hairpinning>true</hairpinning>
+          </internal-interface>
+          <binding-table>
+            <softwire>
+              <ipv4>178.79.150.233</ipv4>
+              <psid>2700</psid>
+              <b4-ipv6>127:11:12:13:14:15:16:128</b4-ipv6>
+              <br-address>8:9:a:b:c:d:e:f</br-address>
+              <port-set>
+                <psid-length>16</psid-length>
+                <reserved-ports-bit-count>0</reserved-ports-bit-count>
+              </port-set>
+              <padding>0</padding>
+            </softwire>
+            <softwire>
+              <ipv4>178.79.150.15</ipv4>
+              <psid>1</psid>
+              <b4-ipv6>127:22:33:44:55:66:77:128</b4-ipv6>
+              <br-address>8:9:a:b:c:d:e:f</br-address>
+              <port-set>
+                <psid-length>4</psid-length>
+                <reserved-ports-bit-count>0</reserved-ports-bit-count>
+              </port-set>
+              <padding>0</padding>
+            </softwire>
+            <softwire>
+              <ipv4>178.79.150.233</ipv4>
+              <psid>7850</psid>
+              <b4-ipv6>127:11:12:13:14:15:16:128</b4-ipv6>
+              <br-address>8:9:a:b:c:d:e:f</br-address>
+              <port-set>
+                <psid-length>16</psid-length>
+                <reserved-ports-bit-count>0</reserved-ports-bit-count>
+              </port-set>
+              <padding>0</padding>
+            </softwire>
+            <softwire>
+              <ipv4>178.79.150.233</ipv4>
+              <psid>54192</psid>
+              <b4-ipv6>127:11:12:13:14:15:16:128</b4-ipv6>
+              <br-address>8:9:a:b:c:d:e:f</br-address>
+              <port-set>
+                <psid-length>16</psid-length>
+                <reserved-ports-bit-count>0</reserved-ports-bit-count>
+              </port-set>
+              <padding>0</padding>
+            </softwire>
+            <softwire>
+              <ipv4>178.79.150.2</ipv4>
+              <psid>7850</psid>
+              <b4-ipv6>127:24:35:46:57:68:79:128</b4-ipv6>
+              <br-address>1e:1:1:1:1:1:1:af</br-address>
+              <port-set>
+                <psid-length>16</psid-length>
+                <reserved-ports-bit-count>0</reserved-ports-bit-count>
+              </port-set>
+              <padding>0</padding>
+            </softwire>
+            <softwire>
+              <ipv4>178.79.150.233</ipv4>
+              <psid>4660</psid>
+              <b4-ipv6>127:11:12:13:14:15:16:128</b4-ipv6>
+              <br-address>8:9:a:b:c:d:e:f</br-address>
+              <port-set>
+                <psid-length>16</psid-length>
+                <reserved-ports-bit-count>0</reserved-ports-bit-count>
+              </port-set>
+              <padding>0</padding>
+            </softwire>
+            <softwire>
+              <ipv4>178.79.150.233</ipv4>
+              <psid>2300</psid>
+              <b4-ipv6>127:11:12:13:14:15:16:128</b4-ipv6>
+              <br-address>8:9:a:b:c:d:e:f</br-address>
+              <port-set>
+                <psid-length>16</psid-length>
+                <reserved-ports-bit-count>0</reserved-ports-bit-count>
+              </port-set>
+              <padding>0</padding>
+            </softwire>
+            <softwire>
+              <ipv4>178.79.150.1</ipv4>
+              <psid>0</psid>
+              <b4-ipv6>127:10:20:30:40:50:60:128</b4-ipv6>
+              <br-address>8:9:a:b:c:d:e:f</br-address>
+              <port-set>
+                <psid-length>0</psid-length>
+                <reserved-ports-bit-count>0</reserved-ports-bit-count>
+              </port-set>
+              <padding>0</padding>
+            </softwire>
+            <softwire>
+              <ipv4>178.79.150.15</ipv4>
+              <psid>0</psid>
+              <b4-ipv6>127:22:33:44:55:66:77:128</b4-ipv6>
+              <br-address>8:9:a:b:c:d:e:f</br-address>
+              <port-set>
+                <psid-length>4</psid-length>
+                <reserved-ports-bit-count>0</reserved-ports-bit-count>
+              </port-set>
+              <padding>0</padding>
+            </softwire>
+            <softwire>
+              <ipv4>178.79.150.233</ipv4>
+              <psid>22788</psid>
+              <b4-ipv6>127:11:12:13:14:15:16:128</b4-ipv6>
+              <br-address>8:9:a:b:c:d:e:f</br-address>
+              <port-set>
+                <psid-length>16</psid-length>
+                <reserved-ports-bit-count>0</reserved-ports-bit-count>
+              </port-set>
+              <padding>0</padding>
+            </softwire>
+            <softwire>
+              <ipv4>178.79.150.233</ipv4>
+              <psid>80</psid>
+              <b4-ipv6>127:2:3:4:5:6:7:128</b4-ipv6>
+              <br-address>8:9:a:b:c:d:e:f</br-address>
+              <port-set>
+                <psid-length>16</psid-length>
+                <reserved-ports-bit-count>0</reserved-ports-bit-count>
+              </port-set>
+              <padding>0</padding>
+            </softwire>
+            <softwire>
+              <ipv4>178.79.150.3</ipv4>
+              <psid>4</psid>
+              <b4-ipv6>127:14:25:36:47:58:69:128</b4-ipv6>
+              <br-address>1e:2:2:2:2:2:2:af</br-address>
+              <port-set>
+                <psid-length>6</psid-length>
+                <reserved-ports-bit-count>0</reserved-ports-bit-count>
+              </port-set>
+              <padding>0</padding>
+            </softwire>
+          </binding-table>
+          <instance>
+            <device>test</device>
+            <queue>
+              <id>1</id>
+              <external-interface>
+                <ip>10.10.10.10</ip>
+                <mac>12:12:12:12:12:12</mac>
+                <next-hop>
+                  <mac>68:68:68:68:68:68</mac>
+                </next-hop>
+              </external-interface>
+              <internal-interface>
+                <ip>8:9:a:b:c:d:e:f</ip>
+                <mac>22:22:22:22:22:22</mac>
+                <next-hop>
+                  <mac>44:44:44:44:44:44</mac>
+                </next-hop>
+              </internal-interface>
+            </queue>
+          </instance>
+        </softwire-config>
+	</config>
+</edit-config>
+"""
+
+XMLResponse = "<ok/>"
+
+
+[[test]]
+
+Message = "add snabb softwire entries"
+
+XMLRequestBody = """
+<edit-config>
+	<target><running/></target>
+	<config xmlns:op="urn:ietf:params:xml:ns:netconf:base:1.0">
+		<softwire-config xmlns="snabb:softwire-v2">
+			<binding-table>
+				<softwire op:operation="create">
+					<ipv4>0.0.0.0</ipv4>
+					<psid>%s</psid>
+					<b4-ipv6>127:24:35:46:57:68:79:128</b4-ipv6>
+					<br-address>1e:1:1:1:1:1:1:af</br-address>
+					<port-set>
+						<psid-length>16</psid-length>
+						<reserved-ports-bit-count>0</reserved-ports-bit-count>
+					</port-set>
+					<padding>0</padding>
+				</softwire>
+			</binding-table>
+		</softwire-config>
+	</config>
+</edit-config>
+"""
+
+XMLResponse = "<ok/>"
+
+Replace = [["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]]
+
+[[test]]
+
+Message = "delete snabb softwire entries"
+
+XMLRequestBody = """
+<edit-config>
+	<target><running/></target>
+	<config xmlns:op="urn:ietf:params:xml:ns:netconf:base:1.0">
+		<softwire-config xmlns="snabb:softwire-v2">
+			<binding-table>
+				<softwire op:operation="delete">
+					<ipv4>0.0.0.0</ipv4>
+					<psid>%s</psid>
+				</softwire>
+			</binding-table>
+		</softwire-config>
+	</config>
+</edit-config>
+"""
+
+XMLResponse = "<ok/>"
+
+Replace = [["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]]
+
+[[test]]
+
+Message = "add snabb softwire entries"
+
+XMLRequestBody = """
+<edit-config>
+	<target><running/></target>
+	<config xmlns:op="urn:ietf:params:xml:ns:netconf:base:1.0">
+		<softwire-config xmlns="snabb:softwire-v2">
+			<binding-table>
+				<softwire op:operation="create">
+					<ipv4>0.0.0.0</ipv4>
+					<psid>%s</psid>
+					<b4-ipv6>127:24:35:46:57:68:79:128</b4-ipv6>
+					<br-address>1e:1:1:1:1:1:1:af</br-address>
+					<port-set>
+						<psid-length>16</psid-length>
+						<reserved-ports-bit-count>0</reserved-ports-bit-count>
+					</port-set>
+					<padding>0</padding>
+				</softwire>
+			</binding-table>
+		</softwire-config>
+	</config>
+</edit-config>
+"""
+
+XMLResponse = "<ok/>"
+
+Replace = [[11,1,130]]
+
+[[test]]
+
+Message = "delete snabb softwire entries"
+
+XMLRequestBody = """
+<edit-config>
+	<target><running/></target>
+	<config xmlns:op="urn:ietf:params:xml:ns:netconf:base:1.0">
+		<softwire-config xmlns="snabb:softwire-v2">
+			<binding-table>
+				<softwire op:operation="delete">
+					<ipv4>0.0.0.0</ipv4>
+					<psid>%s</psid>
+				</softwire>
+			</binding-table>
+		</softwire-config>
+	</config>
+</edit-config>
+"""
+
+XMLResponse = "<ok/>"
+
+Replace = [[11,1,130]]
+
+[[test]]
+
+Message = "add snabb softwire entries, one NETCONF request"
+
+XMLRequestHead = """
+<edit-config>
+	<target><running/></target>
+	<config xmlns:op="urn:ietf:params:xml:ns:netconf:base:1.0">
+		<softwire-config xmlns="snabb:softwire-v2">
+			<binding-table>
+"""
+
+XMLRequestBody = """
+				<softwire op:operation="create">
+					<ipv4>%s.%s.%s.%s</ipv4>
+					<psid>%s</psid>
+					<b4-ipv6>127:24:35:46:57:68:79:128</b4-ipv6>
+					<br-address>1e:1:1:1:1:1:1:af</br-address>
+					<port-set>
+						<psid-length>16</psid-length>
+						<reserved-ports-bit-count>0</reserved-ports-bit-count>
+					</port-set>
+					<padding>0</padding>
+				</softwire>
+"""
+
+XMLRequestTail = """
+			</binding-table>
+		</softwire-config>
+	</config>
+</edit-config>
+"""
+
+XMLResponse = "<ok/>"
+
+Replace = [["192"], ["168"], ["0"], [0,1,2], [10, 1, 50]]
+
+[[test]]
+
+Message = "delete snabb softwire entries, one NETCONF request"
+
+XMLRequestHead = """
+<edit-config>
+	<target><running/></target>
+	<config xmlns:op="urn:ietf:params:xml:ns:netconf:base:1.0">
+		<softwire-config xmlns="snabb:softwire-v2">
+			<binding-table>
+"""
+
+XMLRequestBody = """
+				<softwire op:operation="delete">
+					<ipv4>%s.%s.%s.%s</ipv4>
+					<psid>%s</psid>
+				</softwire>
+"""
+
+XMLRequestTail = """
+			</binding-table>
+		</softwire-config>
+	</config>
+</edit-config>
+"""
+
+XMLResponse = "<ok/>"
+
+Replace = [["192"], ["168"], ["0"], [0,1,2], [10, 1, 50]]
+
+[[test]]
+
+Message = "add snabb softwire entries, one NETCONF request"
+
+XMLRequestHead = """
+<edit-config>
+	<target><running/></target>
+	<config xmlns:op="urn:ietf:params:xml:ns:netconf:base:1.0">
+		<softwire-config xmlns="snabb:softwire-v2">
+			<binding-table>
+"""
+
+XMLRequestBody = """
+				<softwire op:operation="create">
+					<ipv4>%s.%s.%s.%s</ipv4>
+					<psid>%s</psid>
+					<b4-ipv6>127:24:35:46:57:68:79:128</b4-ipv6>
+					<br-address>1e:1:1:1:1:1:1:af</br-address>
+					<port-set>
+						<psid-length>16</psid-length>
+						<reserved-ports-bit-count>0</reserved-ports-bit-count>
+					</port-set>
+					<padding>0</padding>
+				</softwire>
+"""
+
+XMLRequestTail = """
+			</binding-table>
+		</softwire-config>
+	</config>
+</edit-config>
+"""
+
+XMLResponse = "<ok/>"
+
+Replace = [["192"], ["168"], [11,1,13], [0,1,2], [10, 1, 25]]
+
+[[test]]
+
+Message = "delete snabb softwire entries, one NETCONF request"
+
+XMLRequestHead = """
+<edit-config>
+	<target><running/></target>
+	<config xmlns:op="urn:ietf:params:xml:ns:netconf:base:1.0">
+		<softwire-config xmlns="snabb:softwire-v2">
+			<binding-table>
+"""
+
+XMLRequestBody = """
+				<softwire op:operation="delete">
+					<ipv4>%s.%s.%s.%s</ipv4>
+					<psid>%s</psid>
+				</softwire>
+"""
+
+XMLRequestTail = """
+			</binding-table>
+		</softwire-config>
+	</config>
+</edit-config>
+"""
+
+XMLResponse = "<ok/>"
+
+Replace = [["192"], ["168"], [11,1,13], [0,1,2], [10, 1, 25]]
+
+[[test]]
+
+Message = "add snabb softwire entries, one NETCONF request"
+
+XMLRequestHead = """
+<edit-config>
+	<target><running/></target>
+	<config xmlns:op="urn:ietf:params:xml:ns:netconf:base:1.0">
+		<softwire-config xmlns="snabb:softwire-v2">
+			<binding-table>
+"""
+
+XMLRequestBody = """
+				<softwire op:operation="create">
+					<ipv4>%s.%s.%s.%s</ipv4>
+					<psid>%s</psid>
+					<b4-ipv6>127:24:35:46:57:68:79:128</b4-ipv6>
+					<br-address>1e:1:1:1:1:1:1:af</br-address>
+					<port-set>
+						<psid-length>16</psid-length>
+						<reserved-ports-bit-count>0</reserved-ports-bit-count>
+					</port-set>
+					<padding>0</padding>
+				</softwire>
+"""
+
+XMLRequestTail = """
+			</binding-table>
+		</softwire-config>
+	</config>
+</edit-config>
+"""
+
+XMLResponse = "<ok/>"
+
+Replace = [["6"], ["168"], [11,1,13], [0,1,60], [10, 1, 25]]
+
+[[test]]
+
+Message = "delete snabb softwire entries, one NETCONF request"
+
+XMLRequestHead = """
+<edit-config>
+	<target><running/></target>
+	<config xmlns:op="urn:ietf:params:xml:ns:netconf:base:1.0">
+		<softwire-config xmlns="snabb:softwire-v2">
+			<binding-table>
+"""
+
+XMLRequestBody = """
+				<softwire op:operation="delete">
+					<ipv4>%s.%s.%s.%s</ipv4>
+					<psid>%s</psid>
+					<b4-ipv6>127:24:35:46:57:68:79:128</b4-ipv6>
+					<br-address>1e:1:1:1:1:1:1:af</br-address>
+					<port-set>
+						<psid-length>16</psid-length>
+						<reserved-ports-bit-count>0</reserved-ports-bit-count>
+					</port-set>
+					<padding>0</padding>
+				</softwire>
+"""
+
+XMLRequestTail = """
+			</binding-table>
+		</softwire-config>
+	</config>
+</edit-config>
+"""
+
+XMLResponse = "<ok/>"
+
+Replace = [["6"], ["168"], [11,1,13], [0,1,60], [10, 1, 25]]

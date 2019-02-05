@@ -1,0 +1,140 @@
+[login]
+
+address = "[::]:830"
+username = "root"
+password = "root"
+enabled = false
+
+[[test]]
+
+Message = "add interface entries"
+
+XMLRequestBody = """
+<edit-config>
+	<target><running/></target>
+	<config xmlns:op="urn:ietf:params:xml:ns:netconf:base:1.0">
+       <interfaces xmlns="urn:ietf:params:xml:ns:yang:ietf-interfaces">
+          <interface>
+            <name>eth%s</name>
+            <description>Ethernet 0</description>
+            <type xmlns:ianaift="urn:ietf:params:xml:ns:yang:iana-if-type">ianaift:ethernetCsmacd</type>
+          </interface>
+        </interfaces>
+	</config>
+</edit-config>
+"""
+
+XMLResponse = "<ok/>"
+
+Replace = [[100,1,200]]
+
+[[test]]
+
+Message = "delete interface entries"
+
+XMLRequestBody = """
+<edit-config>
+	<target><running/></target>
+	<config xmlns:op="urn:ietf:params:xml:ns:netconf:base:1.0">
+       <interfaces xmlns="urn:ietf:params:xml:ns:yang:ietf-interfaces">
+          <interface op:operation="delete">
+            <name>eth%s</name>
+            <description>Ethernet 0</description>
+            <type xmlns:ianaift="urn:ietf:params:xml:ns:yang:iana-if-type">ianaift:ethernetCsmacd</type>
+          </interface>
+        </interfaces>
+	</config>
+</edit-config>
+"""
+
+XMLResponse = "<ok/>"
+
+Replace = [[100,1,200]]
+
+[[test]]
+
+Message = "add interface entries, one NETCONF request"
+
+XMLRequestHead = """
+<edit-config>
+	<target><running/></target>
+	<config xmlns:op="urn:ietf:params:xml:ns:netconf:base:1.0">
+        <interfaces xmlns="urn:ietf:params:xml:ns:yang:ietf-interfaces">
+"""
+
+XMLRequestBody = """
+          <interface>
+            <name>eth%s</name>
+            <description>Ethernet 0</description>
+            <type xmlns:ianaift="urn:ietf:params:xml:ns:yang:iana-if-type">ianaift:ethernetCsmacd</type>
+          </interface>
+"""
+
+XMLRequestTail = """
+        </interfaces>
+	</config>
+</edit-config>
+"""
+
+XMLResponse = "<ok/>"
+
+Replace = [[300,1,4000]]
+
+[[test]]
+
+Message = "add interface entries, one NETCONF request"
+
+XMLRequestHead = """
+<edit-config>
+	<target><running/></target>
+	<config xmlns:op="urn:ietf:params:xml:ns:netconf:base:1.0">
+        <interfaces xmlns="urn:ietf:params:xml:ns:yang:ietf-interfaces">
+"""
+
+XMLRequestBody = """
+          <interface>
+            <name>eth%s</name>
+            <description>Ethernet 0</description>
+            <type xmlns:ianaift="urn:ietf:params:xml:ns:yang:iana-if-type">ianaift:ethernetCsmacd</type>
+          </interface>
+"""
+
+XMLRequestTail = """
+        </interfaces>
+	</config>
+</edit-config>
+"""
+
+XMLResponse = "<ok/>"
+
+Replace = [[4300,1,8300]]
+
+
+[[test]]
+
+Message = "add interface entries, one NETCONF request"
+
+XMLRequestHead = """
+<edit-config>
+	<target><running/></target>
+	<config xmlns:op="urn:ietf:params:xml:ns:netconf:base:1.0">
+        <interfaces xmlns="urn:ietf:params:xml:ns:yang:ietf-interfaces">
+"""
+
+XMLRequestBody = """
+          <interface>
+            <name>eth%s</name>
+            <description>Ethernet 0</description>
+            <type xmlns:ianaift="urn:ietf:params:xml:ns:yang:iana-if-type">ianaift:ethernetCsmacd</type>
+          </interface>
+"""
+
+XMLRequestTail = """
+        </interfaces>
+	</config>
+</edit-config>
+"""
+
+XMLResponse = "<ok/>"
+
+Replace = [[14300,1,18300]]
