@@ -1,0 +1,19 @@
+[Unit]
+Description=Sysrepo YANG configuration storage and management
+After=syslog.target network.target sysrepod.service
+Requires=sysrepod.service
+PartOf=sysrepod.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/sysrepo-plugind -d -l 4
+PIDFile=/var/run/sysrepo-plugind.pid
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=yes
+ProtectHome=yes
+SystemCallArchitectures=native
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
