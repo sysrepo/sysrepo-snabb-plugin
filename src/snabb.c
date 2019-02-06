@@ -37,13 +37,31 @@
 
 const char *YANG_MODEL = YANG;
 
+thread_job_t *create_job(global_ctx_t *ctx, iter_change_t **p_iter, pthread_rwlock_t *iter_lock, size_t begin, size_t end, int *rc) {
+    thread_job_t *job = NULL;
+
+    job = (thread_job_t *) malloc(sizeof(thread_job_t));
+    if (job) {
+        job->ctx = ctx;
+        job->p_iter = p_iter;
+        job->iter_lock = iter_lock;
+        job->begin = begin;
+        job->end = end;
+        job->rc = rc;
+    }
+
+    return job;
+}
+
 static int
 parse_config(sr_session_ctx_t *session, const char *module_name, global_ctx_t *ctx, sr_notif_event_t event) {
     sr_change_iter_t *it = NULL;
     iter_change_t *iter_change = NULL;
     iter_change_t **p_iter_change = NULL;
     size_t iter_cnt = 0;
+    size_t prev = 0;
     int rc = SR_ERR_OK;
+    int thread_rc = SR_ERR_OK;
     sr_change_oper_t oper;
     sr_val_t *old_value = NULL;
     sr_val_t *new_value = NULL;
@@ -54,22 +72,12 @@ parse_config(sr_session_ctx_t *session, const char *module_name, global_ctx_t *c
     /* create threads */
 	threadpool thpool = thpool_init(THREADS);
 
-    rc = pthread_rwlock_init(&iter_lock, NULL);
-    if (0 != rc) {
-        ERR_MSG("failed to create rwlock");
-        goto error;
-    }
-
     // initalize the array
-    pthread_rwlock_wrlock(&iter_lock);
     size_t iter_change_size = 10;
     iter_cnt = 0;
     iter_change = calloc(iter_change_size, sizeof(*iter_change));
-    if (iter_change) {
-        p_iter_change = &iter_change;
-    }
-    pthread_rwlock_unlock(&iter_lock);
     CHECK_NULL_MSG(iter_change, &rc, error, "failed to allocate memory");
+    p_iter_change = &iter_change;
 
     snprintf(xpath, XPATH_MAX_LEN, "/%s:*", module_name);
 
@@ -79,7 +87,12 @@ parse_config(sr_session_ctx_t *session, const char *module_name, global_ctx_t *c
         goto error;
     }
 
-    size_t prev = 0;
+    rc = pthread_rwlock_init(&iter_lock, NULL);
+    if (0 != rc) {
+        ERR_MSG("failed to create rwlock");
+        goto error;
+    }
+
     INF_MSG("start iterating over the changes");
     while (SR_ERR_OK == sr_get_change_next(session, it, &oper, &old_value, &new_value)) {
         iter_change[iter_cnt].old_val = old_value;
@@ -88,17 +101,7 @@ parse_config(sr_session_ctx_t *session, const char *module_name, global_ctx_t *c
 
         if (is_new_snabb_command(&iter_change[iter_cnt], &iter_change[prev])) {
             if (iter_cnt) {
-                INF("cahnge prev %zd current %zd", prev, iter_cnt);
-                //thpool_add_work(thpool, (void *) xpaths_to_snabb_socket(ctx, p_iter_change, &iter_lock, prev, iter_cnt), NULL);
-                thread_job_t *job = (thread_job_t *) malloc(sizeof(thread_job_t));
-                CHECK_NULL_MSG(job, &rc, error, "failed to allocate memory");
-                job->ctx = ctx;
-                job->p_iter = p_iter_change;
-                job->iter_lock = &iter_lock;
-                job->begin = prev;
-                job->end = iter_cnt;
-                thpool_add_work(thpool, xpaths_to_snabb_socket, job);
-                //TODO check error
+                thpool_add_work(thpool, xpaths_to_snabb_socket, create_job(ctx, p_iter_change, &iter_lock, prev, iter_cnt, &thread_rc));
             }
             prev = iter_cnt;
         }
@@ -115,16 +118,7 @@ parse_config(sr_session_ctx_t *session, const char *module_name, global_ctx_t *c
             CHECK_NULL_MSG(iter_change, &rc, error, "failed to allocate memory");
         }
     }
-    //thpool_add_work(thpool, (void *) xpaths_to_snabb_socket, ctx, p_iter_change, &iter_lock, prev, iter_cnt);
-    thread_job_t *job = (thread_job_t *) malloc(sizeof(thread_job_t));
-    CHECK_NULL_MSG(job, &rc, error, "failed to allocate memory");
-    job->ctx = ctx;
-    job->p_iter = p_iter_change;
-    job->iter_lock = &iter_lock;
-    job->begin = prev;
-    job->end = iter_cnt;
-    thpool_add_work(thpool, xpaths_to_snabb_socket, job);
-    //TODO check error
+    thpool_add_work(thpool, xpaths_to_snabb_socket, create_job(ctx, p_iter_change, &iter_lock, prev, iter_cnt, &thread_rc));
 
 error:
     thpool_wait(thpool);
@@ -142,6 +136,9 @@ error:
         iter_change = NULL;
     }
     pthread_rwlock_destroy(&iter_lock);
+    if (thread_rc != SR_ERR_OK) {
+        return thread_rc;
+    }
     return rc;
 }
 

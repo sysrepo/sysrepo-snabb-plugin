@@ -197,11 +197,9 @@ int socket_send(global_ctx_t *ctx, char *input, char **output, bool fetch, bool 
     nbytes = snprintf(buffer, len, "%s\n%s", str, input);
 
     //TODO add timeout check
-    INF_MSG("lock snabb socket");
     pthread_rwlock_wrlock(&ctx->snabb_lock);
     nbytes = write(ctx->socket_fd, buffer, nbytes);
     if ((int) strlen(buffer) != (int) nbytes) {
-        INF_MSG("unlock snabb socket");
         pthread_rwlock_unlock(&ctx->snabb_lock);
         if (-1 == nbytes) {
             snabb_socket_reconnect(ctx);
@@ -219,7 +217,6 @@ int socket_send(global_ctx_t *ctx, char *input, char **output, bool fetch, bool 
 
     nbytes = read(ctx->socket_fd, ch2, 256);
     ch2[nbytes] = 0;
-    INF_MSG("unlock snabb socket");
     pthread_rwlock_unlock(&ctx->snabb_lock);
 
     /* count new lines */
@@ -230,6 +227,7 @@ int socket_send(global_ctx_t *ctx, char *input, char **output, bool fetch, bool 
         }
     }
     /* if it has 5 new lines that means it has 'status' parameter */
+    DBG("snabb input:\n%s", input);
     if (0 == nbytes) {
         goto failed;
     } else if (5 == counter) {
@@ -239,8 +237,7 @@ int socket_send(global_ctx_t *ctx, char *input, char **output, bool fetch, bool 
     } else if (fetch && 0 == nbytes) {
         goto failed;
     } else {
-        INF("Operation:\n%s", input);
-        INF("Response:\n%s", ch2);
+        DBG("snabb output:\n%s", ch2);
     }
 
     if (fetch) {
@@ -293,7 +290,6 @@ snabb_state_data_to_sysrepo(global_ctx_t *ctx, char *xpath, sr_val_t **values, s
     free(snabb_xpath);
 
     /* send to socket */
-    INF_MSG("send to socket");
     rc = socket_send(ctx, message, &response, true, false);
     CHECK_RET(rc, error, "failed to send message to snabb socket: %s", sr_strerror(rc));
 
@@ -578,41 +574,27 @@ error:
 bool
 is_new_snabb_command(iter_change_t *iter, iter_change_t *prev) {
 
+    /* edge case, can't add/remove on XPATH /softwire-config/instance only edit */
+    char *cmp_xpath = "/snabb-softwire-v2:softwire-config/instance";
+    sr_val_t *tmp_val = (SR_OP_DELETED == iter->oper) ? iter->old_val : iter->new_val; 
+    if (0 == strncmp(cmp_xpath, tmp_val->xpath, strlen(cmp_xpath))) {
+        if (tmp_val->type < SR_BINARY_T && iter->oper != SR_OP_DELETED) {
+            iter->oper = SR_OP_MODIFIED;
+            return true;
+        }
+        return false;
+    }
+
     /* one snabb command for creating list or containers */
     //print_change(iter->oper, iter->old_val, iter->new_val);
-    if (SR_OP_CREATED == iter->oper && iter->new_val->type < SR_BINARY_T) {
-        if (SR_OP_CREATED != prev->oper || iter == prev) {
-            return true;
-        } else {
-            if (SR_OP_CREATED == prev->oper &&
-                0 != strncmp(prev->new_val->xpath, iter->new_val->xpath, strlen(prev->new_val->xpath))) {
-                return true;
-            }
-        }
+    if (SR_OP_CREATED == iter->oper && iter->new_val->type == SR_LIST_T) {
+        return true;
     }
 
     /* one snabb command for deleting list or containers
     lib/yang/path_data.lua:436: Remove only allowed on arrays and tables */
     if (SR_OP_DELETED == iter->oper && iter->old_val->type == SR_LIST_T) {
-        if (SR_OP_DELETED != prev->oper) {
-            return true;
-        } else {
-            if (SR_OP_DELETED == prev->oper &&
-                0 != strncmp(prev->old_val->xpath, iter->old_val->xpath, strlen(iter->old_val->xpath))) {
-                return true;
-            }
-
-            if (SR_OP_DELETED == prev->oper) {
-                if (strlen(iter->old_val->xpath) < strlen(prev->old_val->xpath) &&
-                    0 == strncmp(prev->old_val->xpath, iter->old_val->xpath, strlen(iter->old_val->xpath))) {
-                    return true;
-                }
-                if (strlen(iter->old_val->xpath) > strlen(prev->old_val->xpath) &&
-                    0 != strncmp(prev->old_val->xpath, iter->old_val->xpath, strlen(prev->old_val->xpath))) {
-                    return true;
-                }
-            }
-        }
+        return true;
     }
 
     /* one snabb command for changing leaf's */
@@ -642,7 +624,6 @@ sr_modified_operation(global_ctx_t *ctx, sr_val_t *val) {
     snprintf(message, len, "set-config {path '%s'; config '%s'; schema %s;}", snabb_xpath, leaf, ctx->yang_model);
 
     /* send to socket */
-    INF_MSG("send to socket");
     rc = socket_send(ctx, message, NULL, false, false);
     CHECK_RET(rc, cleanup, "failed to send message to snabb socket: %s", sr_strerror(rc));
 
@@ -675,7 +656,6 @@ sr_deleted_operation(global_ctx_t *ctx, sr_val_t *val) {
     snprintf(message, len, "remove-config {path '%s'; schema %s;}", snabb_xpath, ctx->yang_model);
 
     /* send to socket */
-    INF_MSG("send to socket");
     rc = socket_send(ctx, message, NULL, false, false);
     CHECK_RET(rc, cleanup, "failed to send message to snabb socket: %s", sr_strerror(rc));
 
@@ -768,7 +748,6 @@ sr_created_operation(global_ctx_t *ctx, iter_change_t **p_iter, pthread_rwlock_t
     snprintf(message, len, "add-config {path '%s'; config '%s'; schema %s;}", snabb_xpath, data, ctx->yang_model);
 
     /* send to socket */
-    INF_MSG("send to socket");
     rc = socket_send(ctx, message, NULL, false, false);
     CHECK_RET(rc, cleanup, "failed to send message to snabb socket: %s", sr_strerror(rc));
 
@@ -794,39 +773,38 @@ cleanup:
 void
 xpaths_to_snabb_socket(void *input) {
     int rc = SR_ERR_OK;
-    thread_job_t *th_ctx = (thread_job_t *) input;
-    CHECK_NULL_MSG(th_ctx, &rc, cleanup, "input is NULL");
+    thread_job_t *job = (thread_job_t *) input;
+    CHECK_NULL_MSG(job, &rc, cleanup, "input is NULL");
 
-    iter_change_t *iter = *th_ctx->p_iter;
+    iter_change_t *iter = *job->p_iter;
     sr_change_oper_t oper;
     sr_val_t *tmp_val = NULL;
 
-    pthread_rwlock_rdlock(th_ctx->iter_lock);
-    oper = iter[th_ctx->begin].oper;
+    pthread_rwlock_rdlock(job->iter_lock);
+    oper = iter[job->begin].oper;
     if (SR_OP_DELETED == oper) {
-        tmp_val = iter[th_ctx->begin].old_val;
+        tmp_val = iter[job->begin].old_val;
     } else if (SR_OP_MODIFIED == oper) {
-        tmp_val = iter[th_ctx->begin].new_val;
+        tmp_val = iter[job->begin].new_val;
     } else {
-        tmp_val = iter[th_ctx->begin].new_val;
+        tmp_val = iter[job->begin].new_val;
     }
-    pthread_rwlock_unlock(th_ctx->iter_lock);
+    pthread_rwlock_unlock(job->iter_lock);
 
     if (SR_OP_MODIFIED == oper) {
-        rc = sr_modified_operation(th_ctx->ctx, tmp_val);
+        rc = sr_modified_operation(job->ctx, tmp_val);
     } else if (SR_OP_DELETED == oper) {
-        /* snabb allows remove operations only on arrays and tables, list and leaf-list */
-        if (tmp_val->type == SR_LIST_T) {
-            rc = sr_deleted_operation(th_ctx->ctx, tmp_val);
-        }
+        rc = sr_deleted_operation(job->ctx, tmp_val);
     } else {
-        rc = sr_created_operation(th_ctx->ctx, th_ctx->p_iter, th_ctx->iter_lock, th_ctx->begin, th_ctx->end);
+        rc = sr_created_operation(job->ctx, job->p_iter, job->iter_lock, job->begin, job->end);
     }
     CHECK_RET(rc, cleanup, "failed to run operation: %s", sr_strerror(rc));
 
 cleanup:
-    INF("error code is %s", sr_strerror(rc));
-    if (th_ctx) {
-        free(th_ctx);
+    if (rc != SR_ERR_OK) {
+        *job->rc = rc;
+    }
+    if (job) {
+        free(job);
     }
 }
