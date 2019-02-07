@@ -687,7 +687,6 @@ lyd_to_snabb_json(struct lyd_node *node, char **message, int *len) {
         if (node->child &&
             (node->schema->flags == LYS_CONTAINER || node->schema->flags == LYS_LIST || node->schema->flags == LYS_CHOICE)) {
             if (*len <  7 + (int) strlen(*message)) {
-                *len = *len * 2;
                 rc = double_message_size(message, len);
                 CHECK_RET(rc, error, "failed to double the buffer size: %s", sr_strerror(rc));
             }
@@ -699,7 +698,6 @@ lyd_to_snabb_json(struct lyd_node *node, char **message, int *len) {
         } else {
             struct lyd_node_leaf_list *leaf = (struct lyd_node_leaf_list *) node;
             if (*len <  4 + strlen(node->schema->name) + strlen(leaf->value_str) + (int) strlen(*message)) {
-                *len = *len * 2;
                 rc = double_message_size(message, len);
                 CHECK_RET(rc, error, "failed to double the buffer size: %s", sr_strerror(rc));
             }
