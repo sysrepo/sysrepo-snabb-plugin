@@ -261,20 +261,6 @@ error:
     return rc;
 }
 
-//int double_message_size(char **message, int *len) {
-//    int rc = SR_ERR_OK;
-//    char *tmp = NULL;
-//
-//    *len = *len * 2;
-//    tmp = (char *) realloc(*message, (*len));
-//    CHECK_NULL_MSG(tmp, &rc, error, "failed to allocate memory");
-//
-//    *message = tmp;
-//
-//error:
-//    return rc;
-//}
-
 int
 snabb_state_data_to_sysrepo(global_ctx_t *ctx, char *xpath, sr_val_t **values, size_t *values_cnt) {
     int rc = SR_ERR_OK;
@@ -669,37 +655,68 @@ cleanup:
     return rc;
 }
 
-void
-lyd_to_snabb_json(struct lyd_node *node, char *message, int len) {
-    bool add_brackets = false;
+int double_message_size(char **message, int *len) {
+    int rc = SR_ERR_OK;
+    char *tmp = NULL;
 
-    if (*message == '\0') {
-        add_brackets = true;
-        strncat(message, "{ ", len);
+    *len = *len * 2;
+    tmp = (char *) realloc(*message, (*len));
+    CHECK_NULL_MSG(tmp, &rc, error, "failed to allocate memory");
+
+    *message = tmp;
+
+error:
+    return rc;
+}
+
+int
+lyd_to_snabb_json(struct lyd_node *node, char **message, int *len) {
+    bool add_brackets = false;
+    int rc = SR_ERR_OK;
+
+    if (!len || !message || !*message) {
+        return SR_ERR_INTERNAL;
     }
 
-    //TODO cher message size and double it
+    if (**message == '\0') {
+        add_brackets = true;
+        strncat(*message, "{ ", *len);
+    }
 
     while (node) {
         if (node->child &&
             (node->schema->flags == LYS_CONTAINER || node->schema->flags == LYS_LIST || node->schema->flags == LYS_CHOICE)) {
-            strncat(message, node->schema->name, len);
-            strncat(message, " { ", len);
-            lyd_to_snabb_json(node->child, message, len);
-            strncat(message, " } ", len);
+            if (*len <  7 + (int) strlen(*message)) {
+                *len = *len * 2;
+                rc = double_message_size(message, len);
+                CHECK_RET(rc, error, "failed to double the buffer size: %s", sr_strerror(rc));
+            }
+            strncat(*message, node->schema->name, *len);
+            strncat(*message, " { ", *len);
+            rc = lyd_to_snabb_json(node->child, message, len);
+            CHECK_RET(rc, error, "failed lyd_to_snabb_json: %s", sr_strerror(rc));
+            strncat(*message, " } ", *len);
         } else {
-            strncat(message, node->schema->name, len);
-            strncat(message, " ", len);
             struct lyd_node_leaf_list *leaf = (struct lyd_node_leaf_list *) node;
-            strncat(message, leaf->value_str, len);
-            strncat(message, "; ", len);
+            if (*len <  4 + strlen(node->schema->name) + strlen(leaf->value_str) + (int) strlen(*message)) {
+                *len = *len * 2;
+                rc = double_message_size(message, len);
+                CHECK_RET(rc, error, "failed to double the buffer size: %s", sr_strerror(rc));
+            }
+            strncat(*message, node->schema->name, *len);
+            strncat(*message, " ", *len);
+            strncat(*message, leaf->value_str, *len);
+            strncat(*message, "; ", *len);
         }
         node = node->next;
     }
 
     if (add_brackets) {
-        strncat(message, "}", len);
+        strncat(*message, "}", *len);
     }
+
+error:
+    return rc;
 }
 
 int
@@ -735,8 +752,10 @@ sr_created_operation(global_ctx_t *ctx, iter_change_t **p_iter, pthread_rwlock_t
     data = malloc(sizeof(*data) * SNABB_MESSAGE_MAX);
     CHECK_NULL_MSG(data, &rc, cleanup, "failed to allocate memory");
     *data = '\0';
+    int data_len = SNABB_MESSAGE_MAX;
 
-    lyd_to_snabb_json((*set->set.d)->child, data, SNABB_MESSAGE_MAX);
+    rc = lyd_to_snabb_json((*set->set.d)->child, &data, &data_len);
+    CHECK_RET(rc, cleanup, "failed lyd_to_snabb_json: %s", sr_strerror(rc));
 
     // snabb xpath can't have leafs at the end
     snabb_xpath = sr_xpath_to_snabb_no_end_keys(xpath);
