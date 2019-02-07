@@ -200,24 +200,26 @@ int socket_send(global_ctx_t *ctx, char *input, char **output, bool fetch, bool 
     pthread_rwlock_wrlock(&ctx->snabb_lock);
     nbytes = write(ctx->socket_fd, buffer, nbytes);
     if ((int) strlen(buffer) != (int) nbytes) {
-        pthread_rwlock_unlock(&ctx->snabb_lock);
         if (-1 == nbytes) {
             rc = snabb_socket_reconnect(ctx);
+            pthread_rwlock_unlock(&ctx->snabb_lock);
             CHECK_RET(rc, error, "failed snabb_socket_reconnect: %s", sr_strerror(rc));
             free(buffer);
             return socket_send(ctx, input, output, fetch, ignore_error);
         } else {
+            pthread_rwlock_unlock(&ctx->snabb_lock);
             ERR("Failed to write full input to server: written %d, expected %d", (int) nbytes, (int) strlen(buffer));
             rc = SR_ERR_INTERNAL;
             goto error;
         }
     }
+    nbytes = read(ctx->socket_fd, ch2, 256);
+    pthread_rwlock_unlock(&ctx->snabb_lock);
+
     free(buffer);
     buffer = NULL;
 
-    nbytes = read(ctx->socket_fd, ch2, 256);
     ch2[nbytes] = 0;
-    pthread_rwlock_unlock(&ctx->snabb_lock);
 
     /* count new lines */
     int counter = 0;
@@ -509,7 +511,6 @@ snabb_socket_reconnect(global_ctx_t *ctx) {
     int BUFSIZE = 256;
     char buf[BUFSIZE];
 
-    pthread_rwlock_wrlock(&ctx->snabb_lock);
     // close existing socket if exists
     if (-1 != ctx->socket_fd) {
         close(ctx->socket_fd);
@@ -546,7 +547,6 @@ snabb_socket_reconnect(global_ctx_t *ctx) {
     rc = connect(ctx->socket_fd, (struct sockaddr *) &address, sizeof(struct sockaddr_un));
     CHECK_RET_MSG(rc, error, "failed connection to snabb socket");
 
-    pthread_rwlock_unlock(&ctx->snabb_lock);
     return rc;
 
 error:
@@ -554,7 +554,6 @@ error:
         pclose(fp);
     }
     socket_close(ctx);
-    pthread_rwlock_unlock(&ctx->snabb_lock);
     return SR_ERR_INTERNAL;
 }
 
