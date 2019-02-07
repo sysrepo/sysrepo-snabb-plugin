@@ -202,9 +202,9 @@ int socket_send(global_ctx_t *ctx, char *input, char **output, bool fetch, bool 
     if ((int) strlen(buffer) != (int) nbytes) {
         pthread_rwlock_unlock(&ctx->snabb_lock);
         if (-1 == nbytes) {
-            snabb_socket_reconnect(ctx);
+            rc = snabb_socket_reconnect(ctx);
+            CHECK_RET(rc, error, "failed snabb_socket_reconnect: %s", sr_strerror(rc));
             free(buffer);
-            //TODO prevent infinit loop
             return socket_send(ctx, input, output, fetch, ignore_error);
         } else {
             ERR("Failed to write full input to server: written %d, expected %d", (int) nbytes, (int) strlen(buffer));
