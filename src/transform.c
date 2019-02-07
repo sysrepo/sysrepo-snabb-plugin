@@ -516,8 +516,11 @@ snabb_socket_reconnect(global_ctx_t *ctx) {
         close(ctx->socket_fd);
     }
 
+    //if ((fp = popen("exec bash -c 'snabb ps | head -n1 | cut -d \" \" -f1'", "r")) == NULL) {
+    /* it's possible to get the snabb pid number with this but on an edge case it's possible
+     * that snabb can't add/delete data, use the next one instead */
     // extract pid from the command "snabb ps"
-    if ((fp = popen("exec bash -c 'snabb ps | head -n1 | cut -d \" \" -f1'", "r")) == NULL) {
+    if ((fp = popen("exec bash -c 'snabb ps | sed -n 2p | cut -d \" \" -f9'", "r")) == NULL) {
         ERR_MSG("Error opening pipe!");
         goto error;
     }
