@@ -191,13 +191,10 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
     char xpath[XPATH_MAX_LEN] = {0};
     global_ctx_t *ctx = NULL;
 
-    ctx = malloc(sizeof *ctx);
+    ctx = calloc(1, sizeof *ctx);
     CHECK_NULL_MSG(ctx, &rc, error, "failed malloc global context");
 
-    ctx->cfg = NULL;
     ctx->yang_model = YANG_MODEL;
-    ctx->libyang_ctx = NULL;
-    ctx->sub = NULL;
     ctx->sess = session;
     ctx->socket_fd = -1;
 
