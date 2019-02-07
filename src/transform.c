@@ -444,6 +444,9 @@ clear_context(global_ctx_t *ctx) {
         return;
     }
 
+    pthread_rwlock_destroy(&ctx->snabb_lock);
+    pthread_rwlock_destroy(&ctx->iter_lock);
+
     ly_ctx_destroy(ctx->libyang_ctx, NULL);
 
     /* close startup session */
@@ -462,8 +465,6 @@ clear_context(global_ctx_t *ctx) {
     if (ctx->cfg) {
         clean_cfg(ctx->cfg);
     }
-
-    pthread_rwlock_destroy(&ctx->snabb_lock);
 
     /* free global context */
     INF("%s plugin cleanup finished.", ctx->yang_model);
@@ -517,7 +518,6 @@ snabb_socket_reconnect(global_ctx_t *ctx) {
     // extract pid from the command "snabb ps"
     if ((fp = popen("exec bash -c 'snabb ps | head -n1 | cut -d \" \" -f1'", "r")) == NULL) {
         ERR_MSG("Error opening pipe!");
-        rc = SR_ERR_INTERNAL;
         goto error;
     }
 
@@ -547,7 +547,8 @@ snabb_socket_reconnect(global_ctx_t *ctx) {
     CHECK_RET_MSG(rc, error, "failed connection to snabb socket");
 
     pthread_rwlock_unlock(&ctx->snabb_lock);
-    return SR_ERR_OK;
+    return rc;
+
 error:
     if (fp) {
         pclose(fp);
@@ -720,7 +721,7 @@ error:
 }
 
 int
-sr_created_operation(global_ctx_t *ctx, iter_change_t **p_iter, pthread_rwlock_t *iter_lock, size_t begin, size_t end) {
+sr_created_operation(global_ctx_t *ctx, iter_change_t **p_iter, size_t begin, size_t end) {
     iter_change_t *iter = *p_iter;
     char *snabb_xpath = NULL;
     char *message = NULL;
@@ -729,7 +730,7 @@ sr_created_operation(global_ctx_t *ctx, iter_change_t **p_iter, pthread_rwlock_t
     struct lyd_node *root = NULL;
     char *xpath = NULL;
 
-    pthread_rwlock_rdlock(iter_lock);
+    pthread_rwlock_rdlock(&ctx->iter_lock);
     sr_val_t *create_val = iter[begin].new_val;
     xpath = iter[begin].new_val->xpath;
     for (size_t i = begin; i < end; ++i) {
@@ -744,7 +745,7 @@ sr_created_operation(global_ctx_t *ctx, iter_change_t **p_iter, pthread_rwlock_t
             free(leaf);
         }
     }
-    pthread_rwlock_unlock(iter_lock);
+    pthread_rwlock_unlock(&ctx->iter_lock);
 
     struct ly_set *set = lyd_find_path(root, create_val->xpath);
     CHECK_NULL(set, &rc, cleanup, "failed lyd_find_path with path %s", create_val->xpath);
@@ -799,7 +800,7 @@ xpaths_to_snabb_socket(void *input) {
     sr_change_oper_t oper;
     sr_val_t *tmp_val = NULL;
 
-    pthread_rwlock_rdlock(job->iter_lock);
+    pthread_rwlock_rdlock(&job->ctx->iter_lock);
     oper = iter[job->begin].oper;
     if (SR_OP_DELETED == oper) {
         tmp_val = iter[job->begin].old_val;
@@ -808,14 +809,14 @@ xpaths_to_snabb_socket(void *input) {
     } else {
         tmp_val = iter[job->begin].new_val;
     }
-    pthread_rwlock_unlock(job->iter_lock);
+    pthread_rwlock_unlock(&job->ctx->iter_lock);
 
     if (SR_OP_MODIFIED == oper) {
         rc = sr_modified_operation(job->ctx, tmp_val);
     } else if (SR_OP_DELETED == oper) {
         rc = sr_deleted_operation(job->ctx, tmp_val);
     } else {
-        rc = sr_created_operation(job->ctx, job->p_iter, job->iter_lock, job->begin, job->end);
+        rc = sr_created_operation(job->ctx, job->p_iter, job->begin, job->end);
     }
     CHECK_RET(rc, cleanup, "failed to run operation: %s", sr_strerror(rc));
 

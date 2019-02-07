@@ -37,14 +37,13 @@
 
 const char *YANG_MODEL = YANG;
 
-thread_job_t *create_job(global_ctx_t *ctx, iter_change_t **p_iter, pthread_rwlock_t *iter_lock, size_t begin, size_t end, int *rc) {
+thread_job_t *create_job(global_ctx_t *ctx, iter_change_t **p_iter, size_t begin, size_t end, int *rc) {
     thread_job_t *job = NULL;
 
     job = (thread_job_t *) malloc(sizeof(thread_job_t));
     if (job) {
         job->ctx = ctx;
         job->p_iter = p_iter;
-        job->iter_lock = iter_lock;
         job->begin = begin;
         job->end = end;
         job->rc = rc;
@@ -87,12 +86,6 @@ parse_config(sr_session_ctx_t *session, const char *module_name, global_ctx_t *c
         goto error;
     }
 
-    rc = pthread_rwlock_init(&iter_lock, NULL);
-    if (0 != rc) {
-        ERR_MSG("failed to create rwlock");
-        goto error;
-    }
-
     INF_MSG("start iterating over the changes");
     while (SR_ERR_OK == sr_get_change_next(session, it, &oper, &old_value, &new_value)) {
         iter_change[iter_cnt].old_val = old_value;
@@ -101,7 +94,7 @@ parse_config(sr_session_ctx_t *session, const char *module_name, global_ctx_t *c
 
         if (is_new_snabb_command(&iter_change[iter_cnt], &iter_change[prev])) {
             if (iter_cnt) {
-                thpool_add_work(thpool, xpaths_to_snabb_socket, create_job(ctx, p_iter_change, &iter_lock, prev, iter_cnt, &thread_rc));
+                thpool_add_work(thpool, xpaths_to_snabb_socket, create_job(ctx, p_iter_change, prev, iter_cnt, &thread_rc));
             }
             prev = iter_cnt;
         }
@@ -110,15 +103,15 @@ parse_config(sr_session_ctx_t *session, const char *module_name, global_ctx_t *c
 
         /* lock the mutex and resize the array if needed */
         if (iter_cnt >= iter_change_size) {
-            pthread_rwlock_wrlock(&iter_lock);
+            pthread_rwlock_wrlock(&ctx->iter_lock);
             iter_change_size *= 4;
             iter_change = realloc(iter_change, sizeof(*iter_change) * iter_change_size);
             p_iter_change = &iter_change;
-            pthread_rwlock_unlock(&iter_lock);
+            pthread_rwlock_unlock(&ctx->iter_lock);
             CHECK_NULL_MSG(iter_change, &rc, error, "failed to allocate memory");
         }
     }
-    thpool_add_work(thpool, xpaths_to_snabb_socket, create_job(ctx, p_iter_change, &iter_lock, prev, iter_cnt, &thread_rc));
+    thpool_add_work(thpool, xpaths_to_snabb_socket, create_job(ctx, p_iter_change, prev, iter_cnt, &thread_rc));
 
 error:
     thpool_wait(thpool);
@@ -135,7 +128,6 @@ error:
         free(iter_change);
         iter_change = NULL;
     }
-    pthread_rwlock_destroy(&iter_lock);
     if (thread_rc != SR_ERR_OK) {
         return thread_rc;
     }
@@ -209,6 +201,21 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
     ctx->sess = session;
     ctx->socket_fd = -1;
 
+    /* init mutex for snabb socket */
+    rc = pthread_rwlock_init(&ctx->snabb_lock, NULL);
+    if (0 != rc) {
+        rc = SR_ERR_INTERNAL;
+        ERR_MSG("failed to create snabb rwlock");
+        goto error;
+    }
+
+    /* init mutex for change_cb */
+    rc = pthread_rwlock_init(&ctx->iter_lock, NULL);
+    if (0 != rc) {
+        ERR_MSG("failed to create rwlock");
+        goto error;
+    }
+
     /* get snabb socket */
     rc = snabb_socket_reconnect(ctx);
     CHECK_RET_MSG(rc, error, "failed to get socket from snabb");
@@ -242,13 +249,6 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
     /* load config file */
     ctx->cfg = init_cfg_file();
     CHECK_NULL_MSG(ctx->cfg, &rc, error, "failed to parse cfg config file");
-
-    rc = pthread_rwlock_init(&ctx->snabb_lock, NULL);
-    if (0 != rc) {
-        ERR_MSG("failed to create snabb rwlock");
-        goto error;
-    }
-
     INF("%s plugin initialized successfully", ctx->yang_model);
 
     return SR_ERR_OK;

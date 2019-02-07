@@ -30,7 +30,6 @@
 typedef struct thread_job_s {
     global_ctx_t *ctx;
     iter_change_t **p_iter;
-    pthread_rwlock_t *iter_lock;
     size_t begin;
     size_t end;
     int *rc;
