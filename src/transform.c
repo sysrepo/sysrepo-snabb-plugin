@@ -519,6 +519,8 @@ snabb_socket_reconnect(global_ctx_t *ctx) {
         close(ctx->socket_fd);
     }
 
+    //TODO fix this, exec bash -c fuks up the threads
+
     //if ((fp = popen("exec bash -c 'snabb ps | head -n1 | cut -d \" \" -f1'", "r")) == NULL) {
     /* it's possible to get the snabb pid number with this but on an edge case it's possible
      * that snabb can't add/delete data, use the next one instead */
