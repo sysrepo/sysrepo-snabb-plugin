@@ -66,10 +66,9 @@ parse_config(sr_session_ctx_t *session, const char *module_name, global_ctx_t *c
     sr_val_t *new_value = NULL;
     iter_change = NULL;
     char xpath[XPATH_MAX_LEN] = {0,};
-    pthread_rwlock_t iter_lock;
 
     /* create threads */
-	threadpool thpool = thpool_init(THREADS);
+    threadpool thpool = thpool_init(THREADS);
 
     // initalize the array
     size_t iter_change_size = 10;
@@ -87,15 +86,17 @@ parse_config(sr_session_ctx_t *session, const char *module_name, global_ctx_t *c
     }
 
     INF_MSG("start iterating over the changes");
+    bool skip = true;
     while (SR_ERR_OK == sr_get_change_next(session, it, &oper, &old_value, &new_value)) {
         iter_change[iter_cnt].old_val = old_value;
         iter_change[iter_cnt].new_val = new_value;
         iter_change[iter_cnt].oper = oper;
 
         if (is_new_snabb_command(&iter_change[iter_cnt], &iter_change[prev])) {
-            if (iter_cnt) {
+            if (!skip) {
                 thpool_add_work(thpool, xpaths_to_snabb_socket, create_job(ctx, p_iter_change, prev, iter_cnt, &thread_rc));
             }
+            skip = false;
             prev = iter_cnt;
         }
 

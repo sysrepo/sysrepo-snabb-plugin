@@ -179,7 +179,7 @@ int socket_send(global_ctx_t *ctx, char *input, char **output, bool fetch, bool 
     int nbytes;
     char *buffer = NULL;
     //TODO add large char array
-    char ch2[256];
+    char ch2[256] = {0};
 
     if (NULL == input) {
         return SR_ERR_INTERNAL;
@@ -229,17 +229,14 @@ int socket_send(global_ctx_t *ctx, char *input, char **output, bool fetch, bool 
         }
     }
     /* if it has 5 new lines that means it has 'status' parameter */
-    DBG("snabb input:\n%s", input);
     if (0 == nbytes) {
         goto failed;
     } else if (5 == counter) {
         goto failed;
-    } else if (!fetch && 18 != nbytes) {
+    } else if (!fetch && (21 != nbytes && 18 != nbytes)) {
         goto failed;
     } else if (fetch && 0 == nbytes) {
         goto failed;
-    } else {
-        DBG("snabb output:\n%s", ch2);
     }
 
     if (fetch) {
@@ -249,8 +246,14 @@ int socket_send(global_ctx_t *ctx, char *input, char **output, bool fetch, bool 
     /* set null terminated string at the beggining */
     ch2[0] = '\0';
 
-    return SR_ERR_OK;
+    return rc;
 failed:
+    if (input) {
+        ERR("snabb input:\n%s", input);
+    }
+    if (strlen(ch2)) {
+        ERR("snabb output:\n%s", ch2);
+    }
     if (ignore_error) {
         rc = SR_ERR_INTERNAL;
         WRN("Operation faild for:\n%s", input);
@@ -260,7 +263,7 @@ error:
     if (NULL != buffer) {
         free(buffer);
     }
-    return rc;
+    return SR_ERR_INTERNAL;
 }
 
 int
@@ -565,7 +568,7 @@ is_new_snabb_command(iter_change_t *iter, iter_change_t *prev) {
 
     /* edge case, can't add/remove on XPATH /softwire-config/instance only edit */
     char *cmp_xpath = "/snabb-softwire-v2:softwire-config/instance";
-    sr_val_t *tmp_val = (SR_OP_DELETED == iter->oper) ? iter->old_val : iter->new_val; 
+    sr_val_t *tmp_val = (SR_OP_DELETED == iter->oper) ? iter->old_val : iter->new_val;
     if (0 == strncmp(cmp_xpath, tmp_val->xpath, strlen(cmp_xpath))) {
         if (tmp_val->type < SR_BINARY_T && iter->oper != SR_OP_DELETED) {
             iter->oper = SR_OP_MODIFIED;
