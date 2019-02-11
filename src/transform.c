@@ -511,6 +511,7 @@ snabb_socket_reconnect(global_ctx_t *ctx) {
     struct sockaddr_un address;
     int rc = SR_ERR_OK;
     FILE *snabb_ps = NULL;
+    char *ret = NULL;
     int BUFSIZE = 256;
     char line[BUFSIZE];
 
@@ -520,31 +521,26 @@ snabb_socket_reconnect(global_ctx_t *ctx) {
     }
 
     // extract pid from the command "snabb ps"
-    if ((snabb_ps = popen("snabb ps", "r")) == NULL) {
-        ERR_MSG("Error opening pipe!");
-        goto error;
-    }
+    snabb_ps = popen("snabb ps", "r");
+    CHECK_NULL_MSG(snabb_ps, &rc, cleanup, "Error opening pipe");
 
-    if (fgets(line, sizeof(line), snabb_ps) == NULL) {
-        ERR_MSG("first line of snabb ps empty!");
-        goto error;
-    }
-    if (fgets(line, sizeof(line), snabb_ps) == NULL) {
-        ERR_MSG("second line of snabb ps empty!");
-        goto error;
-    }
-
+    ret = fgets(line, sizeof(line), snabb_ps);
+    CHECK_NULL_MSG(ret, &rc, cleanup, "First line of snabb ps is empty");
+    ret = fgets(line, sizeof(line), snabb_ps);
+    CHECK_NULL_MSG(ret, &rc, cleanup, "Second line of snabb ps is empty");
 
     if (sscanf(line, "  \\- %d   worker for %d", &ignore_pid, &pid) != 2) {
         ERR_MSG("Error running 'snabb ps' command.");
-        goto error;
+        rc = SR_ERR_INTERNAL;
+        goto cleanup;
     }
     INF("connect to snabb socket /run/snabb/%d/config-leader-socket", pid);
 
     ctx->socket_fd = socket(PF_UNIX, SOCK_STREAM, 0);
     if (ctx->socket_fd < 0) {
         WRN("failed to create UNIX socket: %d", ctx->socket_fd);
-        goto error;
+        rc = SR_ERR_INTERNAL;
+        goto cleanup;
     }
 
     snprintf(ctx->socket_path, UNIX_PATH_MAX, "/run/snabb/%d/config-leader-socket", pid);
@@ -556,16 +552,17 @@ snabb_socket_reconnect(global_ctx_t *ctx) {
     snprintf(address.sun_path, UNIX_PATH_MAX, "/run/snabb/%d/config-leader-socket", pid);
 
     rc = connect(ctx->socket_fd, (struct sockaddr *) &address, sizeof(struct sockaddr_un));
-    CHECK_RET_MSG(rc, error, "failed connection to snabb socket");
+    CHECK_RET_MSG(rc, cleanup, "failed connection to snabb socket");
 
-    return rc;
-
-error:
+cleanup:
     if (snabb_ps) {
         pclose(snabb_ps);
     }
-    socket_close(ctx);
-    return SR_ERR_INTERNAL;
+    if (rc != SR_ERR_OK) {
+        socket_close(ctx);
+        rc = SR_ERR_INTERNAL;
+    }
+    return rc;
 }
 
 bool
