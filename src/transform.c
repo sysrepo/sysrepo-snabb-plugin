@@ -507,32 +507,35 @@ cleanup:
 
 int
 snabb_socket_reconnect(global_ctx_t *ctx) {
-    int32_t pid = 0;
+    int32_t pid = 0, ignore_pid;
     struct sockaddr_un address;
     int rc = SR_ERR_OK;
-    FILE *fp = NULL;
+    FILE *snabb_ps = NULL;
     int BUFSIZE = 256;
-    char buf[BUFSIZE];
+    char line[BUFSIZE];
 
     // close existing socket if exists
     if (-1 != ctx->socket_fd) {
         close(ctx->socket_fd);
     }
 
-    //TODO fix this, exec bash -c fuks up the threads
-
-    //if ((fp = popen("exec bash -c 'snabb ps | head -n1 | cut -d \" \" -f1'", "r")) == NULL) {
-    /* it's possible to get the snabb pid number with this but on an edge case it's possible
-     * that snabb can't add/delete data, use the next one instead */
     // extract pid from the command "snabb ps"
-    if ((fp = popen("exec bash -c 'snabb ps | sed -n 2p | cut -d \" \" -f9'", "r")) == NULL) {
+    if ((snabb_ps = popen("snabb ps", "r")) == NULL) {
         ERR_MSG("Error opening pipe!");
         goto error;
     }
 
-    if (fgets(buf, BUFSIZE, fp) != NULL) {
-        sscanf(buf, "%d", &pid);
-    } else {
+    if (fgets(line, sizeof(line), snabb_ps) == NULL) {
+        ERR_MSG("first line of snabb ps empty!");
+        goto error;
+    }
+    if (fgets(line, sizeof(line), snabb_ps) == NULL) {
+        ERR_MSG("second line of snabb ps empty!");
+        goto error;
+    }
+
+
+    if (sscanf(line, "  \\- %d   worker for %d", &ignore_pid, &pid) != 2) {
         ERR_MSG("Error running 'snabb ps' command.");
         goto error;
     }
@@ -558,8 +561,8 @@ snabb_socket_reconnect(global_ctx_t *ctx) {
     return rc;
 
 error:
-    if (fp) {
-        pclose(fp);
+    if (snabb_ps) {
+        pclose(snabb_ps);
     }
     socket_close(ctx);
     return SR_ERR_INTERNAL;
