@@ -197,13 +197,16 @@ int socket_fetch(global_ctx_t *ctx, char *input, char **output) {
 
     nbytes = snprintf(buffer, len, "%s\n%s", str, input);
 
+    pthread_rwlock_wrlock(&ctx->snabb_lock);
     nbytes = write(ctx->socket_fd, buffer, nbytes);
     if ((int) strlen(buffer) != (int) nbytes) {
+        pthread_rwlock_unlock(&ctx->snabb_lock);
         ERR("Failed to write full input to server: written %d, expected %d", (int) nbytes, (int) strlen(buffer));
         rc = SR_ERR_INTERNAL;
         goto error;
     }
     read(ctx->socket_fd, *output, SNABB_SOCKET_MAX);
+    pthread_rwlock_unlock(&ctx->snabb_lock);
 
     free(buffer);
 
@@ -315,6 +318,102 @@ error:
     return SR_ERR_INTERNAL;
 }
 
+static sr_type_t
+sr_ly_data_type_to_sr(LY_DATA_TYPE type)
+{
+    switch(type){
+       case LY_TYPE_BINARY:
+               return SR_BINARY_T;
+       case LY_TYPE_BITS:
+               return SR_BITS_T;
+       case LY_TYPE_BOOL:
+               return SR_BOOL_T;
+       case LY_TYPE_DEC64:
+               return SR_DECIMAL64_T;
+       case LY_TYPE_EMPTY:
+               return SR_LEAF_EMPTY_T;
+       case LY_TYPE_ENUM:
+               return SR_ENUM_T;
+       case LY_TYPE_IDENT:
+               return SR_IDENTITYREF_T;
+       case LY_TYPE_INST:
+               return SR_INSTANCEID_T;
+       case LY_TYPE_STRING:
+               return SR_STRING_T;
+       case LY_TYPE_INT8:
+               return SR_INT8_T;
+       case LY_TYPE_UINT8:
+               return SR_UINT8_T;
+       case LY_TYPE_INT16:
+               return SR_INT16_T;
+       case LY_TYPE_UINT16:
+               return SR_UINT16_T;
+       case LY_TYPE_INT32:
+               return SR_INT32_T;
+       case LY_TYPE_UINT32:
+               return SR_UINT32_T;
+       case LY_TYPE_INT64:
+               return SR_INT64_T;
+       case LY_TYPE_UINT64:
+               return SR_UINT64_T;
+       default:
+               return SR_UNKNOWN_T;
+               //LY_LEAF_REF
+               //LY_DERIVED
+               //LY_TYPE_UNION
+       }
+}
+
+int
+libyang_to_sysrepo_value(sr_val_t *value, LY_DATA_TYPE type, lyd_val leaf)
+{
+       int rc = SR_ERR_OK;
+       /* try to build string data first */
+       rc = sr_val_set_str_data(value, type, leaf.string);
+       if (SR_ERR_OK == rc) {
+               return rc;
+       }
+
+       value->type = sr_ly_data_type_to_sr(type);
+
+    switch (type) {
+    case LY_TYPE_BOOL:
+        value->data.bool_val = leaf.bln;
+        return SR_ERR_OK;
+    case LY_TYPE_DEC64:
+        value->data.decimal64_val = (double) leaf.dec64;
+        return SR_ERR_OK;
+    case LY_TYPE_UNION:
+        return SR_ERR_OK;
+    case LY_TYPE_INT8:
+        value->data.int8_val = leaf.int8;
+        return SR_ERR_OK;
+    case LY_TYPE_UINT8:
+        value->data.uint8_val = leaf.uint8;
+        return SR_ERR_OK;
+    case LY_TYPE_INT16:
+        value->data.int16_val = leaf.int16;
+        return SR_ERR_OK;
+    case LY_TYPE_UINT16:
+        value->data.uint16_val = leaf.uint16;
+        return SR_ERR_OK;
+    case LY_TYPE_INT32:
+        value->data.int32_val = leaf.int32;
+        return SR_ERR_OK;
+    case LY_TYPE_UINT32:
+        value->data.uint32_val = leaf.uint32;
+        return SR_ERR_OK;
+    case LY_TYPE_INT64:
+        value->data.int64_val = leaf.int64;
+        return SR_ERR_OK;
+    case LY_TYPE_UINT64:
+        value->data.uint64_val = leaf.uint64;
+        return SR_ERR_OK;
+    default:
+        return SR_ERR_INTERNAL;
+    }
+}
+
 int
 snabb_state_data_to_sysrepo(global_ctx_t *ctx, char *xpath, sr_val_t **values, size_t *values_cnt) {
     int rc = SR_ERR_OK;
@@ -352,6 +451,7 @@ snabb_state_data_to_sysrepo(global_ctx_t *ctx, char *xpath, sr_val_t **values, s
     LY_TREE_DFS_BEGIN(root, next, node) {
         if (LYS_LEAF == node->schema->nodetype || LYS_LEAFLIST == node->schema->nodetype) {
             struct lyd_node_leaf_list *leaf = (struct lyd_node_leaf_list *) node;
+            struct lys_node_leaf *lys_leaf = (struct lys_node_leaf *) node->schema;
             char *path = lyd_path(node);
             CHECK_NULL_MSG(path, &rc, error, "failed to allocate memory");
 
@@ -359,8 +459,7 @@ snabb_state_data_to_sysrepo(global_ctx_t *ctx, char *xpath, sr_val_t **values, s
             free(path);
             CHECK_RET(rc, error, "failed sr_val_set_xpath: %s", sr_strerror(rc));
 
-            //TODO replace with sr_print_val
-            rc = sr_val_set_str_data(&v[i], leaf->schema->flags, leaf->value_str);
+            rc = libyang_to_sysrepo_value(&v[i], lys_leaf->type.base, leaf->value);
             CHECK_RET(rc, error, "failed to set value: %s", sr_strerror(rc));
 
             i++;
@@ -503,10 +602,6 @@ clear_context(global_ctx_t *ctx) {
     }
 
     /* free sysrepo subscription */
-    if (ctx->sess && ctx->sub_dp) {
-        sr_unsubscribe(ctx->sess, ctx->sub_dp);
-    }
-
     if (ctx->sess && ctx->sub) {
         sr_unsubscribe(ctx->sess, ctx->sub);
     }

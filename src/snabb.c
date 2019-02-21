@@ -168,16 +168,11 @@ error:
 }
 
 static int
-#if defined(SYSREPO_LESS_0_7_5)
-state_data_cb(const char *xpath, sr_val_t **values, size_t *values_cnt, void *private_ctx)
-#elif defined(SYSREPO_LESS_0_7_7)
-state_data_cb(const char *xpath, sr_val_t **values, size_t *values_cnt, uint64_t request_id, void *private_ctx)
-#else
 state_data_cb(const char *xpath, sr_val_t **values, size_t *values_cnt, uint64_t request_id, const char *original_xpath, void *private_ctx)
-#endif
 {
     int rc = SR_ERR_OK;
 
+    INF_MSG("state_data_cb");
     global_ctx_t *ctx = private_ctx;
     rc = snabb_state_data_to_sysrepo(ctx, (char *) xpath, values, values_cnt);
     CHECK_RET(rc, error, "failed to load state data: %s", sr_strerror(rc));
@@ -198,7 +193,6 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
     ctx->yang_model = YANG_MODEL;
     ctx->sess = session;
     ctx->sub = NULL;
-    ctx->sub_dp = NULL;
     ctx->socket_fd = -1;
 
     /* init mutex for snabb socket */
@@ -242,8 +236,15 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
     rc = sr_module_change_subscribe(ctx->sess, ctx->yang_model, module_change_cb, ctx, 0, SR_SUBSCR_DEFAULT, &ctx->sub);
     CHECK_RET(rc, error, "failed sr_module_change_subscribe: %s", sr_strerror(rc));
 
+    //TODO works for netopeer2-cli command:
+    //get --filter-xpath /snabb-softwire-v2:softwire-config/instance/softwire-state/*
+    //but nothing else, it breaks for array of size > 1
+    //snprintf(xpath, XPATH_MAX_LEN, "/%s:softwire-config/instance/softwire-state", ctx->yang_model);
+    //rc = sr_dp_get_items_subscribe(ctx->sess, xpath, state_data_cb, ctx, SR_SUBSCR_CTX_REUSE, &ctx->sub);
+    //CHECK_RET(rc, error, "failed sr_dp_get_items_subscribe: %s", sr_strerror(rc));
+
     snprintf(xpath, XPATH_MAX_LEN, "/%s:softwire-state", ctx->yang_model);
-    rc = sr_dp_get_items_subscribe(ctx->sess, xpath, state_data_cb, ctx, SR_SUBSCR_DEFAULT, &ctx->sub_dp);
+    rc = sr_dp_get_items_subscribe(ctx->sess, xpath, state_data_cb, ctx, SR_SUBSCR_CTX_REUSE, &ctx->sub);
     CHECK_RET(rc, error, "failed sr_dp_get_items_subscribe: %s", sr_strerror(rc));
 
     /* load config file */
@@ -251,16 +252,7 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
     CHECK_NULL_MSG(ctx->cfg, &rc, error, "failed to parse cfg config file");
     INF("%s plugin initialized successfully", ctx->yang_model);
 
-    return SR_ERR_OK;
-
 error:
-    ERR("%s plugin initialization failed: %s", ctx->yang_model, sr_strerror(rc));
-    if (NULL != ctx->sub) {
-        sr_unsubscribe(session, ctx->sub);
-    }
-    if (NULL != ctx) {
-        free(ctx);
-    }
     return rc;
 }
 
