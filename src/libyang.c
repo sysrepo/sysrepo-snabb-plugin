@@ -213,8 +213,6 @@ transform_data_to_array(global_ctx_t *ctx, char *xpath, char *data, struct lyd_n
             }
         }
     }
-    /* add default values */
-    //add_default_nodes(ctx, top_parent);
 
     /* validate the libyang data nodes */
     if (0 != lyd_validate(&top_parent, LYD_OPT_GET, NULL)) {

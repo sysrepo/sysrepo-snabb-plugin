@@ -173,13 +173,66 @@ void socket_close(global_ctx_t *ctx) {
     pthread_rwlock_unlock(&ctx->snabb_lock);
 }
 
-int socket_send(global_ctx_t *ctx, char *input, char **output, bool fetch, bool ignore_error) {
+int socket_fetch(global_ctx_t *ctx, char *input, char **output) {
+    int rc = SR_ERR_OK;
+    int len = 0;
+    int nbytes;
+    char *buffer = NULL;
+
+    if (NULL == input || !output) {
+        return SR_ERR_INTERNAL;
+    }
+
+    /* get input length in char* format */
+    char str[30];
+    sprintf(str, "%d", (int) strlen(input));
+
+    len = (int) strlen(&str[0]) + 1 + (int) strlen(input) + 1;
+
+    buffer = malloc(sizeof(*buffer) * len);
+    CHECK_NULL_MSG(buffer, &rc, error, "failed to allocate memory");
+
+    nbytes = snprintf(buffer, len, "%s\n%s", str, input);
+
+    nbytes = write(ctx->socket_fd, buffer, nbytes);
+    if ((int) strlen(buffer) != (int) nbytes) {
+        ERR("Failed to write full input to server: written %d, expected %d", (int) nbytes, (int) strlen(buffer));
+        rc = SR_ERR_INTERNAL;
+        goto error;
+    }
+    nbytes = read(ctx->socket_fd, ch, SNABB_SOCKET_MAX);
+
+    free(buffer);
+    buffer = NULL;
+
+    ch[nbytes] = 0;
+    *output = strdup(ch);
+
+    ch[0] = '\0';
+
+    return rc;
+
+error:
+    if (input) {
+        ERR("snabb input:\n%s", input);
+    }
+    if (strlen(ch)) {
+        ERR("snabb output:\n%s", ch);
+    }
+    if (NULL != buffer) {
+        free(buffer);
+    }
+    return SR_ERR_INTERNAL;
+}
+
+
+int socket_send(global_ctx_t *ctx, char *input, bool ignore_error) {
     int rc = SR_ERR_OK;
     int len = 0;
     int nbytes;
     char *buffer = NULL;
     //TODO add large char array
-    char ch2[256] = {0};
+    char read_output[256] = {0};
 
     if (NULL == input) {
         return SR_ERR_INTERNAL;
@@ -205,7 +258,7 @@ int socket_send(global_ctx_t *ctx, char *input, char **output, bool fetch, bool 
             pthread_rwlock_unlock(&ctx->snabb_lock);
             CHECK_RET(rc, error, "failed snabb_socket_reconnect: %s", sr_strerror(rc));
             free(buffer);
-            return socket_send(ctx, input, output, fetch, ignore_error);
+            return socket_send(ctx, input, ignore_error);
         } else {
             pthread_rwlock_unlock(&ctx->snabb_lock);
             ERR("Failed to write full input to server: written %d, expected %d", (int) nbytes, (int) strlen(buffer));
@@ -213,18 +266,18 @@ int socket_send(global_ctx_t *ctx, char *input, char **output, bool fetch, bool 
             goto error;
         }
     }
-    nbytes = read(ctx->socket_fd, ch2, 256);
+    nbytes = read(ctx->socket_fd, read_output, 256);
     pthread_rwlock_unlock(&ctx->snabb_lock);
 
     free(buffer);
     buffer = NULL;
 
-    ch2[nbytes] = 0;
+    read_output[nbytes] = 0;
 
     /* count new lines */
     int counter = 0;
-    for (int i = 0; i < (int) strlen(ch2); i++) {
-        if ('\n' == ch2[i]) {
+    for (int i = 0; i < (int) strlen(read_output); i++) {
+        if ('\n' == read_output[i]) {
             counter++;
         }
     }
@@ -233,31 +286,27 @@ int socket_send(global_ctx_t *ctx, char *input, char **output, bool fetch, bool 
         goto failed;
     } else if (5 == counter) {
         goto failed;
-    } else if (!fetch && (21 != nbytes && 18 != nbytes)) {
+    } else if (21 != nbytes && 18 != nbytes) {
         goto failed;
-    } else if (fetch && 0 == nbytes) {
+    } else if (0 == nbytes) {
         goto failed;
-    }
-
-    if (fetch) {
-        *output = strdup(ch2);
     }
 
     /* set null terminated string at the beggining */
-    ch2[0] = '\0';
+    read_output[0] = '\0';
 
     return rc;
 failed:
     if (input) {
         ERR("snabb input:\n%s", input);
     }
-    if (strlen(ch2)) {
-        ERR("snabb output:\n%s", ch2);
+    if (strlen(read_output)) {
+        ERR("snabb output:\n%s", read_output);
     }
     if (ignore_error) {
         rc = SR_ERR_INTERNAL;
         WRN("Operation faild for:\n%s", input);
-        WRN("Respons:\n%s", ch2);
+        WRN("Respons:\n%s", read_output);
     }
 error:
     if (NULL != buffer) {
@@ -281,7 +330,7 @@ snabb_state_data_to_sysrepo(global_ctx_t *ctx, char *xpath, sr_val_t **values, s
     free(snabb_xpath);
 
     /* send to socket */
-    rc = socket_send(ctx, message, &response, true, false);
+    rc = socket_fetch(ctx, message, &response);
     CHECK_RET(rc, error, "failed to send message to snabb socket: %s", sr_strerror(rc));
 
     rc = transform_data_to_array(ctx, xpath, response, &root);
@@ -388,7 +437,7 @@ snabb_datastore_to_sysrepo(global_ctx_t *ctx) {
 
     /* send to socket */
     INF_MSG("send to socket");
-    rc = socket_send(ctx, message, &response, true, false);
+    rc = socket_fetch(ctx, message, &response);
     CHECK_RET(rc, error, "failed to send message to snabb socket: %s", sr_strerror(rc));
 
     rc = transform_data_to_array(ctx, NULL, response, &node);
@@ -634,7 +683,7 @@ sr_modified_operation(global_ctx_t *ctx, sr_val_t *val) {
     snprintf(message, len, "set-config {path '%s'; config '%s'; schema %s;}", snabb_xpath, leaf, ctx->yang_model);
 
     /* send to socket */
-    rc = socket_send(ctx, message, NULL, false, false);
+    rc = socket_send(ctx, message, false);
     CHECK_RET(rc, cleanup, "failed to send message to snabb socket: %s", sr_strerror(rc));
 
 cleanup:
@@ -666,7 +715,7 @@ sr_deleted_operation(global_ctx_t *ctx, sr_val_t *val) {
     snprintf(message, len, "remove-config {path '%s'; schema %s;}", snabb_xpath, ctx->yang_model);
 
     /* send to socket */
-    rc = socket_send(ctx, message, NULL, false, false);
+    rc = socket_send(ctx, message, false);
     CHECK_RET(rc, cleanup, "failed to send message to snabb socket: %s", sr_strerror(rc));
 
 cleanup:
@@ -789,7 +838,7 @@ sr_created_operation(global_ctx_t *ctx, iter_change_t **p_iter, size_t begin, si
     snprintf(message, len, "add-config {path '%s'; config '%s'; schema %s;}", snabb_xpath, data, ctx->yang_model);
 
     /* send to socket */
-    rc = socket_send(ctx, message, NULL, false, false);
+    rc = socket_send(ctx, message, false);
     CHECK_RET(rc, cleanup, "failed to send message to snabb socket: %s", sr_strerror(rc));
 
 cleanup:
