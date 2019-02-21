@@ -192,6 +192,9 @@ int socket_fetch(global_ctx_t *ctx, char *input, char **output) {
     buffer = malloc(sizeof(*buffer) * len);
     CHECK_NULL_MSG(buffer, &rc, error, "failed to allocate memory");
 
+    *output = malloc(sizeof(**output) * SNABB_SOCKET_MAX);
+    CHECK_NULL_MSG(buffer, &rc, error, "failed to allocate memory");
+
     nbytes = snprintf(buffer, len, "%s\n%s", str, input);
 
     nbytes = write(ctx->socket_fd, buffer, nbytes);
@@ -200,15 +203,9 @@ int socket_fetch(global_ctx_t *ctx, char *input, char **output) {
         rc = SR_ERR_INTERNAL;
         goto error;
     }
-    nbytes = read(ctx->socket_fd, ch, SNABB_SOCKET_MAX);
+    read(ctx->socket_fd, *output, SNABB_SOCKET_MAX);
 
     free(buffer);
-    buffer = NULL;
-
-    ch[nbytes] = 0;
-    *output = strdup(ch);
-
-    ch[0] = '\0';
 
     return rc;
 
@@ -216,11 +213,14 @@ error:
     if (input) {
         ERR("snabb input:\n%s", input);
     }
-    if (strlen(ch)) {
-        ERR("snabb output:\n%s", ch);
+    if (strlen(*output)) {
+        ERR("snabb output:\n%s", *output);
     }
     if (NULL != buffer) {
         free(buffer);
+    }
+    if (NULL != *output) {
+        free(*output);
     }
     return SR_ERR_INTERNAL;
 }

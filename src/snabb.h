@@ -33,9 +33,8 @@
 #define XPATH_MAX_LEN     128
 #define UNIX_PATH_MAX     108
 #define SNABB_MESSAGE_MAX 256
+/* hard coded socket size for fetching snabb config/state data */
 #define SNABB_SOCKET_MAX  100000000
-
-char ch[SNABB_SOCKET_MAX];
 
 typedef struct global_ctx_s {
     const char *yang_model;
