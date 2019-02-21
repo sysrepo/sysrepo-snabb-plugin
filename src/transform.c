@@ -449,26 +449,42 @@ clear_context(global_ctx_t *ctx) {
         return;
     }
 
-    pthread_rwlock_destroy(&ctx->snabb_lock);
-    pthread_rwlock_destroy(&ctx->iter_lock);
-
-    ly_ctx_destroy(ctx->libyang_ctx, NULL);
-
-    /* close startup session */
-    sr_session_stop(ctx->startup_sess);
-
-    /* close startup connection */
-    sr_disconnect(ctx->startup_conn);
+    if (ctx->threads) {
+        thpool_destroy(*ctx->threads);
+    }
 
     /* free sysrepo subscription */
-    sr_unsubscribe(ctx->sess, ctx->sub);
+    if (ctx->sess && ctx->sub_dp) {
+        sr_unsubscribe(ctx->sess, ctx->sub_dp);
+    }
 
-    /* close snabb socket */
-    socket_close(ctx);
+    if (ctx->sess && ctx->sub) {
+        sr_unsubscribe(ctx->sess, ctx->sub);
+    }
+
+    pthread_rwlock_destroy(&ctx->snabb_lock);
+    pthread_rwlock_destroy(&ctx->iter_lock);
 
     /* clean config file context */
     if (ctx->cfg) {
         clean_cfg(ctx->cfg);
+    }
+
+    /* close snabb socket */
+    socket_close(ctx);
+
+    /* close startup session */
+    if (ctx->startup_sess) {
+        sr_session_stop(ctx->startup_sess);
+    }
+
+    /* close startup connection */
+    if (ctx->startup_conn) {
+        sr_disconnect(ctx->startup_conn);
+    }
+
+    if (ctx->libyang_ctx) {
+        ly_ctx_destroy(ctx->libyang_ctx, NULL);
     }
 
     /* free global context */

@@ -69,6 +69,7 @@ parse_config(sr_session_ctx_t *session, const char *module_name, global_ctx_t *c
 
     /* create threads */
     threadpool thpool = thpool_init(THREADS);
+    ctx->threads = &thpool;
 
     // initalize the array
     size_t iter_change_size = 10;
@@ -117,6 +118,7 @@ parse_config(sr_session_ctx_t *session, const char *module_name, global_ctx_t *c
 error:
     thpool_wait(thpool);
     thpool_destroy(thpool);
+    ctx->threads = NULL;
 
     if (NULL != it) {
         sr_free_change_iter(it);
@@ -195,6 +197,8 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
 
     ctx->yang_model = YANG_MODEL;
     ctx->sess = session;
+    ctx->sub = NULL;
+    ctx->sub_dp = NULL;
     ctx->socket_fd = -1;
 
     /* init mutex for snabb socket */
@@ -235,14 +239,12 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
     rc = sync_datastores(ctx);
     CHECK_RET(rc, error, "failed to apply sysrepo startup data to snabb: %s", sr_strerror(rc));
 
-    rc = sr_module_change_subscribe(ctx->sess, ctx->yang_model, module_change_cb, ctx, 0, SR_SUBSCR_CTX_REUSE, &ctx->sub);
+    rc = sr_module_change_subscribe(ctx->sess, ctx->yang_model, module_change_cb, ctx, 0, SR_SUBSCR_DEFAULT, &ctx->sub);
     CHECK_RET(rc, error, "failed sr_module_change_subscribe: %s", sr_strerror(rc));
 
-    if (0 != strcmp("ietf-softwire-br", ctx->yang_model)) {
-        snprintf(xpath, XPATH_MAX_LEN, "/%s:softwire-state", ctx->yang_model);
-        rc = sr_dp_get_items_subscribe(ctx->sess, xpath, state_data_cb, ctx, SR_SUBSCR_CTX_REUSE, &ctx->sub);
-        CHECK_RET(rc, error, "failed sr_dp_get_items_subscribe: %s", sr_strerror(rc));
-    }
+    snprintf(xpath, XPATH_MAX_LEN, "/%s:softwire-state", ctx->yang_model);
+    rc = sr_dp_get_items_subscribe(ctx->sess, xpath, state_data_cb, ctx, SR_SUBSCR_DEFAULT, &ctx->sub_dp);
+    CHECK_RET(rc, error, "failed sr_dp_get_items_subscribe: %s", sr_strerror(rc));
 
     /* load config file */
     ctx->cfg = init_cfg_file();
