@@ -141,8 +141,6 @@ module_change_cb(sr_session_ctx_t *session, const char *module_name, sr_notif_ev
     global_ctx_t *ctx = private_ctx;
     INF("%s configuration has changed.", ctx->yang_model);
 
-    ctx->sess = session;
-
     if (SR_EV_APPLY == event) {
         if (false == ctx->cfg->sync_startup) {
             return SR_ERR_OK;
