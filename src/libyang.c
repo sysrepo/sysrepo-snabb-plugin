@@ -133,9 +133,7 @@ transform_data_to_array(global_ctx_t *ctx, char *xpath, char *data, struct lyd_n
     }
     counter = counter + 2;
 
-    /* transform xpath to lyd_node's
-     * ignore key nodes if they exist
-     */
+    /* transform xpath to lyd_node's*/
     if (NULL != xpath) {
         sr_xpath_ctx_t state = {0};
         char *xpath_elem = NULL;
@@ -148,9 +146,24 @@ transform_data_to_array(global_ctx_t *ctx, char *xpath, char *data, struct lyd_n
             if (NULL == xpath_elem) {
                 break;
             }
+
             parent = lyd_new(parent, ctx->module, xpath_elem);
             if (NULL == top_parent) {
                 top_parent = parent;
+            }
+
+            /* add key values */
+            while(true) {
+                char *key, *value, *key_copy;
+                /* iterate over key value pairs in xpath */
+                key = sr_xpath_next_key_name(NULL, &state);
+                if (NULL == key) {
+                    break;
+                }
+                key_copy = strdup(key);
+                value = sr_xpath_next_key_value(NULL, &state);
+                lyd_new_leaf(parent, ctx->module, key_copy, value);
+                free(key_copy);
             }
         }
     }

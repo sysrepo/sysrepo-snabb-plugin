@@ -236,12 +236,9 @@ sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
     rc = sr_module_change_subscribe(ctx->sess, ctx->yang_model, module_change_cb, ctx, 0, SR_SUBSCR_DEFAULT, &ctx->sub);
     CHECK_RET(rc, error, "failed sr_module_change_subscribe: %s", sr_strerror(rc));
 
-    //TODO works for netopeer2-cli command:
-    //get --filter-xpath /snabb-softwire-v2:softwire-config/instance/softwire-state/*
-    //but nothing else, it breaks for array of size > 1
-    //snprintf(xpath, XPATH_MAX_LEN, "/%s:softwire-config/instance/softwire-state", ctx->yang_model);
-    //rc = sr_dp_get_items_subscribe(ctx->sess, xpath, state_data_cb, ctx, SR_SUBSCR_CTX_REUSE, &ctx->sub);
-    //CHECK_RET(rc, error, "failed sr_dp_get_items_subscribe: %s", sr_strerror(rc));
+    snprintf(xpath, XPATH_MAX_LEN, "/%s:softwire-config/instance/softwire-state", ctx->yang_model);
+    rc = sr_dp_get_items_subscribe(ctx->sess, xpath, state_data_cb, ctx, SR_SUBSCR_CTX_REUSE, &ctx->sub);
+    CHECK_RET(rc, error, "failed sr_dp_get_items_subscribe: %s", sr_strerror(rc));
 
     snprintf(xpath, XPATH_MAX_LEN, "/%s:softwire-state", ctx->yang_model);
     rc = sr_dp_get_items_subscribe(ctx->sess, xpath, state_data_cb, ctx, SR_SUBSCR_CTX_REUSE, &ctx->sub);

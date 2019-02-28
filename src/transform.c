@@ -421,6 +421,8 @@ snabb_state_data_to_sysrepo(global_ctx_t *ctx, char *xpath, sr_val_t **values, s
     char message[SNABB_MESSAGE_MAX] = {0};
     char *response = NULL;
     struct lyd_node *root = NULL;
+    struct lyd_node *new_root = NULL;
+    struct ly_set *root_set = NULL;
     int cnt = 0;
 
     CHECK_RET(rc, error, "failed to format xpath: %s", sr_strerror(rc));
@@ -435,12 +437,21 @@ snabb_state_data_to_sysrepo(global_ctx_t *ctx, char *xpath, sr_val_t **values, s
     rc = transform_data_to_array(ctx, xpath, response, &root);
     CHECK_RET(rc, error, "failed parse snabb data in libyang: %s", sr_strerror(rc));
 
+    /* move to root node based on xpath */
+    root_set = lyd_find_path(root, xpath);
+    CHECK_NULL_MSG(root_set, &rc, error, "failed lyd_find_path");
+    if (root_set->number <= 0) {
+        ERR("lyd_find_path did not find any data for xpath %s", xpath);
+        goto error;
+    }
+    new_root = root_set->set.d[0];
+
     const struct lyd_node *node = NULL, *next = NULL;
-    LY_TREE_DFS_BEGIN(root, next, node) {
+    LY_TREE_DFS_BEGIN(new_root, next, node) {
         if (LYS_LEAF == node->schema->nodetype || LYS_LEAFLIST == node->schema->nodetype) {
             cnt++;
         }
-        LY_TREE_DFS_END(root, next, node);
+        LY_TREE_DFS_END(new_root, next, node);
     }
 
     sr_val_t *v = NULL;
@@ -448,7 +459,7 @@ snabb_state_data_to_sysrepo(global_ctx_t *ctx, char *xpath, sr_val_t **values, s
     CHECK_RET(rc, error, "failed sr_new_values: %s", sr_strerror(rc));
 
     int i = 0;
-    LY_TREE_DFS_BEGIN(root, next, node) {
+    LY_TREE_DFS_BEGIN(new_root, next, node) {
         if (LYS_LEAF == node->schema->nodetype || LYS_LEAFLIST == node->schema->nodetype) {
             struct lyd_node_leaf_list *leaf = (struct lyd_node_leaf_list *) node;
             struct lys_node_leaf *lys_leaf = (struct lys_node_leaf *) node->schema;
@@ -464,7 +475,7 @@ snabb_state_data_to_sysrepo(global_ctx_t *ctx, char *xpath, sr_val_t **values, s
 
             i++;
         }
-        LY_TREE_DFS_END(root, next, node);
+        LY_TREE_DFS_END(new_root, next, node);
     }
 
     *values = v;
@@ -472,6 +483,9 @@ snabb_state_data_to_sysrepo(global_ctx_t *ctx, char *xpath, sr_val_t **values, s
 
 error:
     /* free lyd_node */
+    if (NULL != root_set) {
+        ly_set_free(root_set);
+    }
     if (NULL != root) {
         lyd_free(root);
     }
