@@ -1,6 +1,6 @@
 FROM ubuntu:18.04
 
-MAINTAINER mislav.novakovic@sartura.hr
+MAINTAINER luka.paulic@sartura.hr
 
 RUN \
       apt-get update && apt-get install -y \
