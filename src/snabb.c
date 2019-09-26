@@ -158,7 +158,7 @@ static int module_change_cb(sr_session_ctx_t *session, const char *module_name,
     /* copy running datastore to startup */
 
     rc = sr_copy_config(ctx->startup_sess, module_name, SR_DS_RUNNING,
-                        SR_DS_STARTUP);
+                        SR_DS_STARTUP, 0);
     if (SR_ERR_OK != rc) {
       WRN_MSG("Failed to copy running datastore to startup");
       /* TODO handle this error in snabb
@@ -276,7 +276,7 @@ int sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
             sr_strerror(rc));
 
   rc = sr_copy_config(ctx->startup_sess, ctx->yang_model, SR_DS_STARTUP,
-                      SR_DS_RUNNING);
+                      SR_DS_RUNNING, 0);
   if (SR_ERR_OK != rc) {
     WRN_MSG("Failed to copy running datastore to startup");
     /* TODO handle this error */
