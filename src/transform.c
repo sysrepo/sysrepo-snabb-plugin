@@ -54,7 +54,7 @@ char *sr_xpath_to_snabb(char *xpath) {
   int len = strlen(xpath);
 
   CHECK_NULL_MSG(tmp, &rc, error, "failed to allocate memory");
-  *tmp = '\0'; // init xpath string
+  *tmp = '\0';  // init xpath string
 
   node = sr_xpath_next_node(xpath, &state);
   CHECK_NULL_MSG(node, &rc, error, "failed sr_xpath_next_node");
@@ -112,7 +112,7 @@ char *sr_xpath_to_snabb_no_end_keys(char *xpath) {
   int len = strlen(xpath);
 
   CHECK_NULL_MSG(tmp, &rc, error, "failed to allocate memory");
-  *tmp = '\0'; // init xpath string
+  *tmp = '\0';  // init xpath string
 
   node = sr_xpath_next_node(xpath, &state);
   CHECK_NULL_MSG(node, &rc, error, "failed sr_xpath_next_node");
@@ -318,45 +318,45 @@ error:
 
 static sr_type_t sr_ly_data_type_to_sr(LY_DATA_TYPE type) {
   switch (type) {
-  case LY_TYPE_BINARY:
-    return SR_BINARY_T;
-  case LY_TYPE_BITS:
-    return SR_BITS_T;
-  case LY_TYPE_BOOL:
-    return SR_BOOL_T;
-  case LY_TYPE_DEC64:
-    return SR_DECIMAL64_T;
-  case LY_TYPE_EMPTY:
-    return SR_LEAF_EMPTY_T;
-  case LY_TYPE_ENUM:
-    return SR_ENUM_T;
-  case LY_TYPE_IDENT:
-    return SR_IDENTITYREF_T;
-  case LY_TYPE_INST:
-    return SR_INSTANCEID_T;
-  case LY_TYPE_STRING:
-    return SR_STRING_T;
-  case LY_TYPE_INT8:
-    return SR_INT8_T;
-  case LY_TYPE_UINT8:
-    return SR_UINT8_T;
-  case LY_TYPE_INT16:
-    return SR_INT16_T;
-  case LY_TYPE_UINT16:
-    return SR_UINT16_T;
-  case LY_TYPE_INT32:
-    return SR_INT32_T;
-  case LY_TYPE_UINT32:
-    return SR_UINT32_T;
-  case LY_TYPE_INT64:
-    return SR_INT64_T;
-  case LY_TYPE_UINT64:
-    return SR_UINT64_T;
-  default:
-    return SR_UNKNOWN_T;
-    // LY_LEAF_REF
-    // LY_DERIVED
-    // LY_TYPE_UNION
+    case LY_TYPE_BINARY:
+      return SR_BINARY_T;
+    case LY_TYPE_BITS:
+      return SR_BITS_T;
+    case LY_TYPE_BOOL:
+      return SR_BOOL_T;
+    case LY_TYPE_DEC64:
+      return SR_DECIMAL64_T;
+    case LY_TYPE_EMPTY:
+      return SR_LEAF_EMPTY_T;
+    case LY_TYPE_ENUM:
+      return SR_ENUM_T;
+    case LY_TYPE_IDENT:
+      return SR_IDENTITYREF_T;
+    case LY_TYPE_INST:
+      return SR_INSTANCEID_T;
+    case LY_TYPE_STRING:
+      return SR_STRING_T;
+    case LY_TYPE_INT8:
+      return SR_INT8_T;
+    case LY_TYPE_UINT8:
+      return SR_UINT8_T;
+    case LY_TYPE_INT16:
+      return SR_INT16_T;
+    case LY_TYPE_UINT16:
+      return SR_UINT16_T;
+    case LY_TYPE_INT32:
+      return SR_INT32_T;
+    case LY_TYPE_UINT32:
+      return SR_UINT32_T;
+    case LY_TYPE_INT64:
+      return SR_INT64_T;
+    case LY_TYPE_UINT64:
+      return SR_UINT64_T;
+    default:
+      return SR_UNKNOWN_T;
+      // LY_LEAF_REF
+      // LY_DERIVED
+      // LY_TYPE_UNION
   }
 }
 
@@ -371,40 +371,40 @@ int libyang_to_sysrepo_value(sr_val_t *value, LY_DATA_TYPE type, lyd_val leaf) {
   value->type = sr_ly_data_type_to_sr(type);
 
   switch (type) {
-  case LY_TYPE_BOOL:
-    value->data.bool_val = leaf.bln;
-    return SR_ERR_OK;
-  case LY_TYPE_DEC64:
-    value->data.decimal64_val = (double)leaf.dec64;
-    return SR_ERR_OK;
-  case LY_TYPE_UNION:
-    return SR_ERR_OK;
-  case LY_TYPE_INT8:
-    value->data.int8_val = leaf.int8;
-    return SR_ERR_OK;
-  case LY_TYPE_UINT8:
-    value->data.uint8_val = leaf.uint8;
-    return SR_ERR_OK;
-  case LY_TYPE_INT16:
-    value->data.int16_val = leaf.int16;
-    return SR_ERR_OK;
-  case LY_TYPE_UINT16:
-    value->data.uint16_val = leaf.uint16;
-    return SR_ERR_OK;
-  case LY_TYPE_INT32:
-    value->data.int32_val = leaf.int32;
-    return SR_ERR_OK;
-  case LY_TYPE_UINT32:
-    value->data.uint32_val = leaf.uint32;
-    return SR_ERR_OK;
-  case LY_TYPE_INT64:
-    value->data.int64_val = leaf.int64;
-    return SR_ERR_OK;
-  case LY_TYPE_UINT64:
-    value->data.uint64_val = leaf.uint64;
-    return SR_ERR_OK;
-  default:
-    return SR_ERR_INTERNAL;
+    case LY_TYPE_BOOL:
+      value->data.bool_val = leaf.bln;
+      return SR_ERR_OK;
+    case LY_TYPE_DEC64:
+      value->data.decimal64_val = (double)leaf.dec64;
+      return SR_ERR_OK;
+    case LY_TYPE_UNION:
+      return SR_ERR_OK;
+    case LY_TYPE_INT8:
+      value->data.int8_val = leaf.int8;
+      return SR_ERR_OK;
+    case LY_TYPE_UINT8:
+      value->data.uint8_val = leaf.uint8;
+      return SR_ERR_OK;
+    case LY_TYPE_INT16:
+      value->data.int16_val = leaf.int16;
+      return SR_ERR_OK;
+    case LY_TYPE_UINT16:
+      value->data.uint16_val = leaf.uint16;
+      return SR_ERR_OK;
+    case LY_TYPE_INT32:
+      value->data.int32_val = leaf.int32;
+      return SR_ERR_OK;
+    case LY_TYPE_UINT32:
+      value->data.uint32_val = leaf.uint32;
+      return SR_ERR_OK;
+    case LY_TYPE_INT64:
+      value->data.int64_val = leaf.int64;
+      return SR_ERR_OK;
+    case LY_TYPE_UINT64:
+      value->data.uint64_val = leaf.uint64;
+      return SR_ERR_OK;
+    default:
+      return SR_ERR_INTERNAL;
   }
 }
 
@@ -579,35 +579,40 @@ error:
 }
 
 int sync_datastores(global_ctx_t *ctx) {
-  char startup_file[XPATH_MAX_LEN] = {0};
+  char *datatstore_command = NULL;
   int rc = SR_ERR_OK;
-  struct stat st;
+  FILE *fp;
 
   /* check if the startup datastore is empty
-   * by checking the content of the file */
-  snprintf(startup_file, XPATH_MAX_LEN, "/etc/sysrepo/data/%s.startup",
-           ctx->yang_model);
+   * by checking the output of sysrepocfg */
 
-  if (stat(startup_file, &st) != 0) {
-    ERR("Could not open sysrepo file %s", startup_file);
-    return SR_ERR_INTERNAL;
-  }
+  int len = strlen(ctx->yang_model) + 30;
+  datatstore_command = malloc(sizeof(char) * len);
+  CHECK_NULL_MSG(datatstore_command, &rc, cleanup, "malloc failed");
 
-  if (0 == st.st_size) {
-    /* copy the snabb datastore to sysrepo */
-    INF_MSG("copy snabb data to sysrepo");
-    rc = snabb_datastore_to_sysrepo(ctx);
-    CHECK_RET(rc, error, "failed to apply snabb data to sysrepo: %s",
-              sr_strerror(rc));
-  } else {
+  snprintf(datatstore_command, len, "sysrepocfg -X -d startup -m %s", ctx->yang_model);
+
+  fp = popen(datatstore_command, "r");
+  CHECK_NULL_MSG(fp, &rc, cleanup, "popen failed");
+  if (fgetc(fp) != EOF) {
     /* copy the sysrepo startup datastore to snabb */
     INF_MSG("copy sysrepo data to snabb");
     // rc = sysrepo_datastore_to_snabb(ctx);
-    CHECK_RET(rc, error, "failed to apply sysrepo startup data to snabb: %s",
+    CHECK_RET(rc, cleanup, "failed to apply sysrepo startup data to snabb: %s",
+              sr_strerror(rc));
+  } else {
+    /* copy the snabb datastore to sysrepo */
+    INF_MSG("copy snabb data to sysrepo");
+    rc = snabb_datastore_to_sysrepo(ctx);
+    CHECK_RET(rc, cleanup, "failed to apply snabb data to sysrepo: %s",
               sr_strerror(rc));
   }
 
-error:
+cleanup:
+  if (NULL != datatstore_command) {
+    free(datatstore_command);
+  }
+  fclose(fp);
   return rc;
 }
 
@@ -747,7 +752,6 @@ cleanup:
 }
 
 bool is_new_snabb_command(iter_change_t *iter, iter_change_t *prev) {
-
   /* edge case, can't add/remove on XPATH /softwire-config/instance only edit */
   char *cmp_xpath = "/snabb-softwire-v2:softwire-config/instance";
   sr_val_t *tmp_val =
