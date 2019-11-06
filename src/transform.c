@@ -519,7 +519,8 @@ int libyang_data_to_sysrepo(sr_session_ctx_t *session, struct lyd_node *root) {
         xpath = lyd_path(node);
         CHECK_NULL_MSG(xpath, &rc, error, "failed to allocate memory");
 
-        rc = sr_set_item_str(session, xpath, leaf->value_str, SR_EDIT_DEFAULT);
+        rc = sr_set_item_str(session, xpath, leaf->value_str, NULL,
+                             SR_EDIT_DEFAULT);
         CHECK_RET(rc, error, "failed sr_set_item_str: %s", sr_strerror(rc));
         free(xpath);
         xpath = NULL;
