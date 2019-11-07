@@ -579,18 +579,14 @@ error:
 }
 
 int sync_datastores(global_ctx_t *ctx) {
-  char *datatstore_command = NULL;
+  char datatstore_command[128] = {0};
   int rc = SR_ERR_OK;
   FILE *fp;
 
   /* check if the startup datastore is empty
    * by checking the output of sysrepocfg */
 
-  int len = strlen(ctx->yang_model) + 30;
-  datatstore_command = malloc(sizeof(char) * len);
-  CHECK_NULL_MSG(datatstore_command, &rc, cleanup, "malloc failed");
-
-  snprintf(datatstore_command, len, "sysrepocfg -X -d startup -m %s", ctx->yang_model);
+  snprintf(datatstore_command, 128, "sysrepocfg -X -d startup -m %s", YANG_MODEL);
 
   fp = popen(datatstore_command, "r");
   CHECK_NULL_MSG(fp, &rc, cleanup, "popen failed");
