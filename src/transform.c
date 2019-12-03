@@ -586,7 +586,7 @@ int sync_datastores(global_ctx_t *ctx) {
   /* check if the startup datastore is empty
    * by checking the output of sysrepocfg */
 
-  snprintf(datatstore_command, 128, "sysrepocfg -X -d startup -m %s", YANG_MODEL);
+  snprintf(datatstore_command, 128, "sysrepocfg -X -d startup -m %s", ctx->yang_model);
 
   fp = popen(datatstore_command, "r");
   CHECK_NULL_MSG(fp, &rc, cleanup, "popen failed");
