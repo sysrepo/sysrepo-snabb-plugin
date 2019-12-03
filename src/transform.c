@@ -40,6 +40,8 @@
 #include "snabb.h"
 #include "transform.h"
 
+#define DATASTORE_COMMAND_MAX 128
+
 /* transform xpath to snabb compatible format
  * 1) remove yang model from xpath
  * 2) remove "'" from the key value
@@ -579,16 +581,16 @@ error:
 }
 
 int sync_datastores(global_ctx_t *ctx) {
-  char datatstore_command[128] = {0};
+  char datastore_command[DATASTORE_COMMAND_MAX] = {0};
   int rc = SR_ERR_OK;
   FILE *fp;
 
   /* check if the startup datastore is empty
    * by checking the output of sysrepocfg */
 
-  snprintf(datatstore_command, 128, "sysrepocfg -X -d startup -m %s", ctx->yang_model);
+  snprintf(datastore_command, DATASTORE_COMMAND_MAX, "sysrepocfg -X -d startup -m %s", ctx->yang_model);
 
-  fp = popen(datatstore_command, "r");
+  fp = popen(datastore_command, "r");
   CHECK_NULL_MSG(fp, &rc, cleanup, "popen failed");
   if (fgetc(fp) != EOF) {
     /* copy the sysrepo startup datastore to snabb */
@@ -605,10 +607,10 @@ int sync_datastores(global_ctx_t *ctx) {
   }
 
 cleanup:
-  if (NULL != datatstore_command) {
-    free(datatstore_command);
+  if (fp) {
+    fclose(fp);
   }
-  fclose(fp);
+
   return rc;
 }
 
