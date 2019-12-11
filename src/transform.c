@@ -608,7 +608,7 @@ int sync_datastores(global_ctx_t *ctx) {
 
 cleanup:
   if (fp) {
-    fclose(fp);
+    pclose(fp);
   }
 
   return rc;
