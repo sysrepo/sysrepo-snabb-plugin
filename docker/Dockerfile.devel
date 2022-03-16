@@ -1,6 +1,8 @@
 FROM ubuntu:18.04
 
-MAINTAINER luka.paulic@sartura.hr
+MAINTAINER filip.maric@sartura.hr
+
+ENV DEBIAN_FRONTEND=noninteractive
 
 RUN \
       apt-get update && apt-get install -y \
@@ -9,18 +11,27 @@ RUN \
       build-essential \
       vim \
       supervisor \
-      libpcre3-dev \
+      libpcre2-dev \
       pkg-config \
       libavl-dev \
       libev-dev \
       libprotobuf-c-dev \
       protobuf-c-compiler \
-      libssh-dev \
+      libsystemd-dev \
+      zlib1g-dev \
+#      libssh-dev \
       libssl-dev \
       swig \
-	  valgrind \
-	  systemd \
-      python-dev
+	valgrind \
+	systemd \
+      python-dev \
+      golang
+
+# install libssh
+RUN \
+      git clone https://git.libssh.org/projects/libssh.git && \
+      cd libssh && mkdir build && cd build && \
+      cmake .. && make && make install
 
 # add netconf user
 RUN \
@@ -100,9 +111,9 @@ RUN \
 
 # sysrepo-snabb-plugin
 RUN \
-      git clone https://github.com/sysrepo/sysrepo-snabb-plugin.git && \
+      git clone https://github.com/sartura/sysrepo-snabb-plugin.git && \
       cd sysrepo-snabb-plugin && mkdir build && cd build && \
-      git checkout sysrepo-1.x.x && \
+      git checkout sysrepo-1.x.x-devel && \
       cmake -DCMAKE_BUILD_TYPE:String="debug" -DPLUGIN:BOOL=ON -DYANG_MODEL:String="snabb-softwire-v2" -DSR_PLUGINS_DIR="/usr/local/lib/sysrepo/plugins" .. && \
       make -j2 && \
       make install && \
