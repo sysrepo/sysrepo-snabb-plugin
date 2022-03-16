@@ -1,9 +1,7 @@
 cmake_minimum_required(VERSION 2.8.12)
 project(sysrepo-snabb-plugin)
 
-set(CMAKE_C_FLAGS         "${CMAKE_C_FLAGS} -Wall -Wpedantic -std=gnu11")
-set(CMAKE_C_FLAGS_RELEASE "-DNDEBUG -O2")
-set(CMAKE_C_FLAGS_DEBUG   "-g -O0")
+include(CompileOptions.cmake)
 
 set(YANG_MODEL "snabb-softwire-v2" CACHE STRING "YANG model to use.")
 set(PLUGIN 0 CACHE BOOL "Build a plugin.")
@@ -28,21 +26,18 @@ execute_process(COMMAND
   ERROR_QUIET OUTPUT_STRIP_TRAILING_WHITESPACE)
 
 # by default set to older version for backward compatibility
-set(SYSREPO_LESS_0_7_5 ON CACHE BOOL "Sysrepo version older than 0.7.5 (< 0.7.5)")
-set(SYSREPO_LESS_0_7_7 ON CACHE BOOL "Sysrepo version older than 0.7.7 (< 0.7.7)")
+#set(SYSREPO_LESS_0_7_5 ON CACHE BOOL "Sysrepo version older than 0.7.5 (< 0.7.5)")
+#set(SYSREPO_LESS_0_7_7 ON CACHE BOOL "Sysrepo version older than 0.7.7 (< 0.7.7)")
 
 # get sysrepo version
 find_package(PkgConfig)
 if (PKG_CONFIG_FOUND)
-    execute_process(COMMAND ${PKG_CONFIG_EXECUTABLE} "--modversion" "libsysrepo" OUTPUT_VARIABLE SYSREPO_VERSION)
+    execute_process(COMMAND ${PKG_CONFIG_EXECUTABLE} "--modversion" "sysrepo" OUTPUT_VARIABLE SYSREPO_VERSION)
     if(SYSREPO_VERSION)
         # strip new line from string
         string(STRIP ${SYSREPO_VERSION} SYSREPO_VERSION)
-        if(${SYSREPO_VERSION} VERSION_GREATER "0.7.4")
-            set(SYSREPO_LESS_0_7_5 OFF)
-        endif()
-        if(${SYSREPO_VERSION} VERSION_GREATER "0.7.6")
-            set(SYSREPO_LESS_0_7_7 OFF)
+        if(${SYSREPO_VERSION} VERSION_LESS "1.0.0")
+            message(FATAL_ERROR "${PROJECT_NAME} requires at least libsysrepo verision 1.0.0")
         endif()
     endif()
 endif()
@@ -60,14 +55,9 @@ endif()
 
 set_target_properties(${CMAKE_PROJECT_NAME} PROPERTIES PREFIX "")
 
-# dependencies - libyang
-find_package(LibYANG REQUIRED)
-target_link_libraries(${CMAKE_PROJECT_NAME} ${LIBYANG_LIBRARIES})
-include_directories(${LIBYANG_INCLUDE_DIRS})
-
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules")
 find_package(SYSREPO REQUIRED)
-target_link_libraries(${CMAKE_PROJECT_NAME} ${SYSREPO_LIBRARIES})
-include_directories(${SYSREPO_INCLUDE_DIRS})
+find_package(LIBYANG REQUIRED)
 
 # find pthreads
 set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
@@ -77,24 +67,16 @@ target_link_libraries(${CMAKE_PROJECT_NAME} ${CMAKE_THREAD_LIBS_INIT})
 # pthread
 set(CMAKE_REQUIRED_LIBRARIES pthread)
 
-# get sysrepo plugins directory
-if (NOT SR_PLUGINS_DIR)
-    if (PKG_CONFIG_FOUND)
-        execute_process(COMMAND ${PKG_CONFIG_EXECUTABLE} "--variable=SR_PLUGINS_DIR" "libsysrepo" OUTPUT_VARIABLE SR_PLUGINS_DIR)
-        string(STRIP ${SR_PLUGINS_DIR} SR_PLUGINS_DIR)
-    endif()
-endif()
-if (NOT SR_PLUGINS_DIR)
-    message(FATAL_ERROR "Cannot get sysrepo plugins directory due to missing pkg-config, set SR_PLUGINS_DIR manually.")
-endif()
+target_link_libraries(
+    ${PROJECT_NAME}
+    ${SYSREPO_LIBRARIES}
+    ${LIBYANG_LIBRARIES}
+)
 
-# find programs
-if (NOT SYSREPOCTL_EXECUTABLE)
-    find_program(SYSREPOCTL_EXECUTABLE sysrepoctl)
-endif()
-if (NOT SYSREPOCTL_EXECUTABLE)
-    message(FATAL_ERROR "Unable to find sysrepoctl, set SYSREPOCTL_EXECUTABLE manually.")
-endif()
+include_directories(
+    ${SYSREPO_INCLUDE_DIRS}
+    ${LIBYANG_INCLUDE_DIRS}
+)
 
 if (PLUGIN)
 	install(TARGETS ${CMAKE_PROJECT_NAME} DESTINATION ${SR_PLUGINS_DIR})
