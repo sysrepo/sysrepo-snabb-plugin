@@ -28,18 +28,28 @@
 #define ENABLE_LOGGING(LOG_LEVEL) sr_log_stderr((LOG_LEVEL))
 #endif
 
-#define ERR(MSG, ...) SRP_LOG_ERR(MSG, __VA_ARGS__)
-#define ERR_MSG(MSG) SRP_LOG_ERRMSG(MSG)
-#define WRN(MSG, ...) SRP_LOG_WRN(MSG, __VA_ARGS__)
-#define WRN_MSG(MSG) SRP_LOG_WRNMSG(MSG)
-#define INF(MSG, ...) SRP_LOG_INF(MSG, __VA_ARGS__)
-#define INF_MSG(MSG) SRP_LOG_INFMSG(MSG)
-#define DBG(MSG, ...) SRP_LOG_DBG(MSG, __VA_ARGS__)
-#define DBG_MSG(MSG) SRP_LOG_DBGMSG(MSG)
+#define PLUGIN_NAME "snabb plugin"
+
+#define ERR(MSG, ...) SRPLG_LOG_ERR(PLUGIN_NAME, MSG, __VA_ARGS__)
+#define ERR_MSG(MSG) SRPLG_LOG_ERR(PLUGIN_NAME, MSG)
+#define WRN(MSG, ...) SRPLG_LOG_WRN(PLUGIN_NAME, MSG, __VA_ARGS__)
+#define WRN_MSG(MSG) SRPLG_LOG_WRN(PLUGIN_NAME, MSG)
+#define INF(MSG, ...) SRPLG_LOG_INF(PLUGIN_NAME, MSG, __VA_ARGS__)
+#define INF_MSG(MSG) SRPLG_LOG_INF(PLUGIN_NAME, MSG)
+#define DBG(MSG, ...) SRPLG_LOG_DBG(PLUGIN_NAME, MSG, __VA_ARGS__)
+#define DBG_MSG(MSG) SRPLG_LOG_DBG(PLUGIN_NAME, MSG)
 
 #define CHECK_RET_MSG(RET, LABEL, MSG)                                         \
   do {                                                                         \
     if (SR_ERR_OK != RET) {                                                    \
+      ERR_MSG(MSG);                                                            \
+      goto LABEL;                                                              \
+    }                                                                          \
+  } while (0)
+
+#define CHECK_LY_RET_MSG(RET, LABEL, MSG)                                      \
+  do {                                                                         \
+    if (LY_SUCCESS != RET) {                                                   \
       ERR_MSG(MSG);                                                            \
       goto LABEL;                                                              \
     }                                                                          \
@@ -56,7 +66,7 @@
 #define CHECK_NULL_MSG(VALUE, RET, LABEL, MSG)                                 \
   do {                                                                         \
     if (NULL == VALUE) {                                                       \
-      *RET = SR_ERR_NOMEM;                                                     \
+      *(RET) = SR_ERR_NO_MEMORY;                                               \
       ERR_MSG(MSG);                                                            \
       goto LABEL;                                                              \
     }                                                                          \
@@ -65,7 +75,7 @@
 #define CHECK_NULL(VALUE, RET, LABEL, MSG, ...)                                \
   do {                                                                         \
     if (NULL == VALUE) {                                                       \
-      *RET = SR_ERR_NOMEM;                                                     \
+      *(RET) = SR_ERR_NO_MEMORY;                                               \
       ERR(MSG, __VA_ARGS__);                                                   \
       goto LABEL;                                                              \
     }                                                                          \
