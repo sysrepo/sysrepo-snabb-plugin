@@ -144,7 +144,7 @@ error:
   return rc;
 }
 
-static int module_change_cb(sr_session_ctx_t *session, const char *module_name,
+static int module_change_cb(sr_session_ctx_t *session, uint32_t sub_id, const char *module_name,
                             const char *xpath, sr_event_t event,
                             uint32_t request_id, void *private_data) {
   int rc = SR_ERR_OK;
@@ -157,8 +157,7 @@ static int module_change_cb(sr_session_ctx_t *session, const char *module_name,
     }
     /* copy running datastore to startup */
 
-    rc = sr_copy_config(ctx->startup_sess, module_name, SR_DS_RUNNING,
-                        SR_DS_STARTUP, 0);
+    rc = sr_copy_config(ctx->startup_sess, module_name, SR_DS_RUNNING, 0);
     if (SR_ERR_OK != rc) {
       WRN_MSG("Failed to copy running datastore to startup");
       /* TODO handle this error in snabb
@@ -177,15 +176,17 @@ error:
   return rc;
 }
 
-static int state_data_cb(sr_session_ctx_t *session, const char *module_name,
+static int state_data_cb(sr_session_ctx_t *session, uint32_t sub_id, const char *module_name,
                          const char *path, const char *request_xpath,
                          uint32_t request_id, struct lyd_node **parent,
                          void *private_data) {
   int rc = SR_ERR_OK;
   const struct ly_ctx *ly_ctx = NULL;
+  sr_conn_ctx_t *conn = NULL;
   char *value_string = NULL;
   sr_val_t *values = NULL;
   size_t values_cnt = 0;
+  LY_ERR ly_err = LY_SUCCESS;
 
   INF_MSG("state_data_cb");
   global_ctx_t *ctx = private_data;
@@ -193,10 +194,19 @@ static int state_data_cb(sr_session_ctx_t *session, const char *module_name,
   CHECK_RET(rc, error, "failed to load state data: %s", sr_strerror(rc));
 
   if (*parent == NULL) {
-    ly_ctx = sr_get_context(sr_session_get_connection(session));
+    conn = sr_session_get_connection(session);
+    CHECK_NULL_MSG(conn, &rc, error,
+                   "sr_session_get_connection error: session is NULL");
+    ly_ctx = sr_acquire_context(conn);
     CHECK_NULL_MSG(ly_ctx, &rc, error,
-                   "sr_get_context error: libyang context is NULL");
-    *parent = lyd_new_path(NULL, ly_ctx, request_xpath, NULL, 0, 0);
+                   "sr_acquire_context error: libyang context is NULL");
+
+    ly_err = lyd_new_path(NULL, ly_ctx, request_xpath, NULL, 0, parent);
+    if (LY_SUCCESS != ly_err) {
+      rc = SR_ERR_INTERNAL;
+      goto error;
+    }
+    CHECK_LY_RET_MSG(ly_err, error, "failed lyd_new_path");
   }
 
   for (size_t i = 0; i < values_cnt; i++) {
@@ -207,6 +217,9 @@ static int state_data_cb(sr_session_ctx_t *session, const char *module_name,
   }
 
 error:
+  if (ly_ctx != NULL) {
+    sr_release_context(conn);
+  }
   if (values != NULL) {
     sr_free_values(values, values_cnt);
     values = NULL;
@@ -275,8 +288,8 @@ int sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
   CHECK_RET(rc, error, "failed to apply sysrepo startup data to snabb: %s",
             sr_strerror(rc));
 
-  rc = sr_copy_config(ctx->sess, ctx->yang_model, SR_DS_STARTUP,
-                      SR_DS_RUNNING, 0);
+
+  rc = sr_copy_config(ctx->sess, ctx->yang_model, SR_DS_STARTUP, 0);
   if (SR_ERR_OK != rc) {
     WRN_MSG("Failed to copy startup datastore to running");
     /* TODO handle this error */
@@ -284,23 +297,21 @@ int sr_plugin_init_cb(sr_session_ctx_t *session, void **private_ctx) {
   }
 
   rc = sr_module_change_subscribe(ctx->sess, ctx->yang_model, NULL,
-                                  module_change_cb, ctx, 0, SR_SUBSCR_DEFAULT,
+                                  module_change_cb, ctx, 0, 0,
                                   &ctx->sub);
   CHECK_RET(rc, error, "failed sr_module_change_subscribe: %s",
             sr_strerror(rc));
 
   snprintf(xpath, XPATH_MAX_LEN, "/%s:softwire-config/instance/softwire-state",
            ctx->yang_model);
-  rc = sr_oper_get_items_subscribe(ctx->sess, ctx->yang_model, xpath,
-                                   state_data_cb, ctx, SR_SUBSCR_CTX_REUSE,
-                                   &ctx->sub);
-  CHECK_RET(rc, error, "failed sr_dp_get_items_subscribe: %s", sr_strerror(rc));
+  rc = sr_oper_get_subscribe(ctx->sess, ctx->yang_model, xpath,
+                                   state_data_cb, ctx, 0, &ctx->sub);
+  CHECK_RET(rc, error, "failed sr_oper_get_subscribe: %s", sr_strerror(rc));
 
   snprintf(xpath, XPATH_MAX_LEN, "/%s:softwire-state", ctx->yang_model);
-  rc = sr_oper_get_items_subscribe(ctx->sess, ctx->yang_model, xpath,
-                                   state_data_cb, ctx, SR_SUBSCR_CTX_REUSE,
-                                   &ctx->sub);
-  CHECK_RET(rc, error, "failed sr_dp_get_items_subscribe: %s", sr_strerror(rc));
+  rc = sr_oper_get_subscribe(ctx->sess, ctx->yang_model, xpath,
+                                   state_data_cb, ctx, 0, &ctx->sub);
+  CHECK_RET(rc, error, "failed sr_oper_get_subscribe: %s", sr_strerror(rc));
 
   /* load config file */
   ctx->cfg = init_cfg_file();
@@ -332,7 +343,7 @@ static void sigint_handler(__attribute__((unused)) int signum) {
   exit_application = 1;
 }
 
-int main() {
+int main(void) {
   INF_MSG("Plugin application mode initialized");
   sr_conn_ctx_t *connection = NULL;
   sr_session_ctx_t *session = NULL;
