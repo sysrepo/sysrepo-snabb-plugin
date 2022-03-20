@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
 #include <sysrepo.h>
 #include <sysrepo/xpath.h>
@@ -47,18 +48,18 @@ int parse_yang_model(global_ctx_t *ctx) {
   connection = sr_session_get_connection(ctx->sess);
   CHECK_NULL_MSG(connection, &rc, cleanup, "sr_session_get_connection error");
 
-  libyang_ctx = sr_get_context(connection);
+  libyang_ctx = sr_acquire_context(connection);
   CHECK_NULL_MSG(libyang_ctx, &rc, cleanup, "sr_get_context error");
 
   /* ietf-softwire-br YANG models depends on ietf-softwire-common */
   if (0 == strcmp("ietf-softwire-br", ctx->yang_model)) {
     module = (struct lys_module *)ly_ctx_get_module(
-        libyang_ctx, "ietf-softwire-common", NULL, 1);
+        libyang_ctx, "ietf-softwire-common", NULL);
     CHECK_NULL_MSG(module, &rc, cleanup, "ly_ctx_get_module error");
   }
 
   module = (struct lys_module *)ly_ctx_get_module(libyang_ctx, ctx->yang_model,
-                                                  NULL, 1);
+                                                  NULL);
   CHECK_NULL_MSG(module, &rc, cleanup, "ly_ctx_get_module error");
 
   ctx->module = module;
@@ -74,7 +75,7 @@ void clear_libyang_ctx(global_ctx_t *ctx) {
   INF_MSG("clear libyang context");
 }
 */
-bool list_or_container(sr_type_t type) {
+bool list_or_container(sr_val_type_t type) {
   return type == SR_LIST_T || type == SR_CONTAINER_T ||
          type == SR_CONTAINER_PRESENCE_T;
 }
@@ -86,6 +87,7 @@ int transform_data_to_array(global_ctx_t *ctx, char *xpath, char *data,
   char *token = NULL, *tmp = NULL, *last = NULL;
   int i = 0, counter = 0;
   struct lyd_node *parent = NULL, *top_parent = NULL, *check = NULL;
+  LY_ERR ly_err = LY_SUCCESS;
 
   /* replace escaped new lines */
   for (i = 0; i < (int)strlen(data); i++) {
@@ -112,7 +114,13 @@ int transform_data_to_array(global_ctx_t *ctx, char *xpath, char *data,
         break;
       }
 
-      parent = lyd_new(parent, ctx->module, xpath_elem);
+      ly_err = lyd_new_inner(parent, ctx->module, xpath_elem, false, &parent);
+      CHECK_LY_RET_MSG(ly_err, error, "failed lyd_new_path");
+      if (LY_SUCCESS != ly_err) {
+        rc = SR_ERR_INTERNAL;
+        goto error;
+      }
+
       if (NULL == top_parent) {
         top_parent = parent;
       }
@@ -127,7 +135,13 @@ int transform_data_to_array(global_ctx_t *ctx, char *xpath, char *data,
         }
         key_copy = strdup(key);
         value = sr_xpath_next_key_value(NULL, &state);
-        lyd_new_leaf(parent, ctx->module, key_copy, value);
+
+        ly_err = lyd_new_term(parent, ctx->module, key_copy, value, false, NULL);
+        if (LY_SUCCESS != ly_err) {
+          rc = SR_ERR_INTERNAL;
+          goto error;
+        }
+
         free(key_copy);
       }
     }
@@ -156,7 +170,7 @@ int transform_data_to_array(global_ctx_t *ctx, char *xpath, char *data,
       continue;
     } else if ('}' == *token) {
       /* when list/container are closed set new parent */
-      parent = parent ? parent->parent : NULL;
+      parent = (struct lyd_node *) (parent ? parent->parent : NULL);
       continue;
     } else {
       last = &token[strlen(token) - 1];
@@ -166,8 +180,8 @@ int transform_data_to_array(global_ctx_t *ctx, char *xpath, char *data,
       if ('{' == *last) {
         /* only list/container's have the last element '{' */
         /* TODO check NULl */
-        parent = lyd_new(parent, ctx->module, token);
-        if (NULL == parent) {
+        ly_err = lyd_new_inner(parent, ctx->module, token, false, &parent);
+        if (LY_SUCCESS != ly_err) {
           rc = SR_ERR_INTERNAL;
           goto error;
         }
@@ -177,14 +191,14 @@ int transform_data_to_array(global_ctx_t *ctx, char *xpath, char *data,
         continue;
       } else if ('}' == *last) {
         /* when list/container are closed set new parent */
-        parent = parent ? parent->parent : NULL;
+        parent = (struct lyd_node *) (parent ? parent->parent : NULL);
         continue;
       } else {
         *last = '\0';
         /* add leafs */
         /* TODO check NULl */
-        check = lyd_new_leaf(parent, ctx->module, token, tmp);
-        if (NULL == check) {
+        ly_err = lyd_new_term(parent, ctx->module, token, tmp, false, &check);
+        if (LY_SUCCESS != ly_err) {
           rc = SR_ERR_INTERNAL;
           goto error;
         }
@@ -193,7 +207,7 @@ int transform_data_to_array(global_ctx_t *ctx, char *xpath, char *data,
   }
 
   /* validate the libyang data nodes */
-  if (0 != lyd_validate(&top_parent, LYD_OPT_GET, NULL)) {
+  if (LY_SUCCESS != lyd_validate_all(&top_parent, NULL, LYD_VALIDATE_PRESENT, NULL)) {
     rc = SR_ERR_INTERNAL;
     goto error;
   }
