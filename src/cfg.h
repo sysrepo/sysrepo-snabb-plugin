@@ -29,7 +29,7 @@ typedef struct cfg_config {
     bool sync_startup;
 } cfg_ctx;
 
-cfg_ctx *init_cfg_file();
+cfg_ctx *init_cfg_file(void);
 void clean_cfg(cfg_ctx *ctx);
 
 #endif /* CFG_H */
