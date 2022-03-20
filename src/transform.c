@@ -53,7 +53,7 @@ char *sr_xpath_to_snabb(char *xpath) {
 
   /* snabb xpath is always smaller than sysrepo's xpath */
   char *tmp = strdup(xpath);
-  int len = strlen(xpath);
+  size_t len = strlen(xpath);
 
   CHECK_NULL_MSG(tmp, &rc, error, "failed to allocate memory");
   *tmp = '\0';  // init xpath string
@@ -111,7 +111,7 @@ char *sr_xpath_to_snabb_no_end_keys(char *xpath) {
 
   /* snabb xpath is always smaller than sysrepo's xpath */
   char *tmp = strdup(xpath);
-  int len = strlen(xpath);
+  size_t len = strlen(xpath);
 
   CHECK_NULL_MSG(tmp, &rc, error, "failed to allocate memory");
   *tmp = '\0';  // init xpath string
@@ -125,7 +125,7 @@ char *sr_xpath_to_snabb_no_end_keys(char *xpath) {
       strncat(tmp, node, len);
     }
 
-    int current_pos = strlen(tmp);
+    size_t current_pos = strlen(tmp);
     while (true) {
       char *key, *value;
       /* iterate over key value pairs in xpath */
@@ -173,8 +173,8 @@ void socket_close(global_ctx_t *ctx) {
 
 int socket_fetch(global_ctx_t *ctx, char *input, char **output) {
   int rc = SR_ERR_OK;
-  int len = 0;
-  int nbytes;
+  size_t len = 0;
+  ssize_t nbytes = 0;
   char *buffer = NULL;
 
   if (NULL == input || !output) {
@@ -185,7 +185,7 @@ int socket_fetch(global_ctx_t *ctx, char *input, char **output) {
   char str[30];
   sprintf(str, "%d", (int)strlen(input));
 
-  len = (int)strlen(&str[0]) + 1 + (int)strlen(input) + 1;
+  len = (size_t) strlen(&str[0]) + 1 + strlen(input) + 1;
 
   buffer = malloc(sizeof(*buffer) * len);
   CHECK_NULL_MSG(buffer, &rc, error, "failed to allocate memory");
@@ -196,7 +196,7 @@ int socket_fetch(global_ctx_t *ctx, char *input, char **output) {
   nbytes = snprintf(buffer, len, "%s\n%s", str, input);
 
   pthread_rwlock_wrlock(&ctx->snabb_lock);
-  nbytes = write(ctx->socket_fd, buffer, nbytes);
+  nbytes = write(ctx->socket_fd, buffer, (size_t) nbytes);
   if ((int)strlen(buffer) != (int)nbytes) {
     pthread_rwlock_unlock(&ctx->snabb_lock);
     ERR("Failed to write full input to server: written %d, expected %d",
@@ -229,8 +229,8 @@ error:
 
 int socket_send(global_ctx_t *ctx, char *input, bool ignore_error) {
   int rc = SR_ERR_OK;
-  int len = 0;
-  int nbytes;
+  size_t len = 0;
+  ssize_t nbytes = 0;
   char *buffer = NULL;
   // TODO add large char array
   char read_output[256] = {0};
@@ -243,7 +243,7 @@ int socket_send(global_ctx_t *ctx, char *input, bool ignore_error) {
   char str[30];
   sprintf(str, "%d", (int)strlen(input));
 
-  len = (int)strlen(&str[0]) + 1 + (int)strlen(input) + 1;
+  len = (size_t) strlen(&str[0]) + 1 + strlen(input) + 1;
 
   buffer = malloc(sizeof(*buffer) * len);
   CHECK_NULL_MSG(buffer, &rc, error, "failed to allocate memory");
@@ -252,7 +252,7 @@ int socket_send(global_ctx_t *ctx, char *input, bool ignore_error) {
 
   // TODO add timeout check
   pthread_rwlock_wrlock(&ctx->snabb_lock);
-  nbytes = write(ctx->socket_fd, buffer, nbytes);
+  nbytes = write(ctx->socket_fd, buffer, (size_t) nbytes);
   if ((int)strlen(buffer) != (int)nbytes) {
     if (-1 == nbytes) {
       rc = snabb_socket_reconnect(ctx);
@@ -318,7 +318,7 @@ error:
   return SR_ERR_INTERNAL;
 }
 
-static sr_type_t sr_ly_data_type_to_sr(LY_DATA_TYPE type) {
+static sr_val_type_t sr_ly_data_type_to_sr(LY_DATA_TYPE type) {
   switch (type) {
     case LY_TYPE_BINARY:
       return SR_BINARY_T;
@@ -362,19 +362,12 @@ static sr_type_t sr_ly_data_type_to_sr(LY_DATA_TYPE type) {
   }
 }
 
-int libyang_to_sysrepo_value(sr_val_t *value, LY_DATA_TYPE type, lyd_val leaf) {
-  int rc = SR_ERR_OK;
-  /* try to build string data first */
-  rc = sr_val_set_str_data(value, type, leaf.string);
-  if (SR_ERR_OK == rc) {
-    return rc;
-  }
-
+int libyang_to_sysrepo_value(sr_val_t *value, LY_DATA_TYPE type, struct lyd_value leaf) {
   value->type = sr_ly_data_type_to_sr(type);
 
   switch (type) {
     case LY_TYPE_BOOL:
-      value->data.bool_val = leaf.bln;
+      value->data.bool_val = leaf.boolean;
       return SR_ERR_OK;
     case LY_TYPE_DEC64:
       value->data.decimal64_val = (double)leaf.dec64;
@@ -419,7 +412,8 @@ int snabb_state_data_to_sysrepo(global_ctx_t *ctx, char *xpath,
   struct lyd_node *root = NULL;
   struct lyd_node *new_root = NULL;
   struct ly_set *root_set = NULL;
-  int cnt = 0;
+  size_t cnt = 0;
+  LY_ERR ly_err = LY_SUCCESS;
 
   CHECK_RET(rc, error, "failed to format xpath: %s", sr_strerror(rc));
   char *snabb_xpath = sr_xpath_to_snabb(xpath);
@@ -437,21 +431,21 @@ int snabb_state_data_to_sysrepo(global_ctx_t *ctx, char *xpath,
             sr_strerror(rc));
 
   /* move to root node based on xpath */
-  root_set = lyd_find_path(root, xpath);
-  CHECK_NULL_MSG(root_set, &rc, error, "failed lyd_find_path");
-  if (root_set->number <= 0) {
+  ly_err = lyd_find_xpath(root, xpath, &root_set);
+  CHECK_LY_RET_MSG(ly_err, error, "failed lyd_find_xpath");
+  if (root_set->count <= 0) {
     ERR("lyd_find_path did not find any data for xpath %s", xpath);
     goto error;
   }
-  new_root = root_set->set.d[0];
+  new_root = root_set->dnodes[0];
 
-  const struct lyd_node *node = NULL, *next = NULL;
-  LY_TREE_DFS_BEGIN(new_root, next, node) {
+  const struct lyd_node *node = NULL;
+  LYD_TREE_DFS_BEGIN(new_root, node) {
     if (LYS_LEAF == node->schema->nodetype ||
         LYS_LEAFLIST == node->schema->nodetype) {
       cnt++;
     }
-    LY_TREE_DFS_END(new_root, next, node);
+    LYD_TREE_DFS_END(new_root, node);
   }
 
   sr_val_t *v = NULL;
@@ -459,24 +453,24 @@ int snabb_state_data_to_sysrepo(global_ctx_t *ctx, char *xpath,
   CHECK_RET(rc, error, "failed sr_new_values: %s", sr_strerror(rc));
 
   int i = 0;
-  LY_TREE_DFS_BEGIN(new_root, next, node) {
+  LYD_TREE_DFS_BEGIN(new_root, node) {
     if (LYS_LEAF == node->schema->nodetype ||
         LYS_LEAFLIST == node->schema->nodetype) {
-      struct lyd_node_leaf_list *leaf = (struct lyd_node_leaf_list *)node;
-      struct lys_node_leaf *lys_leaf = (struct lys_node_leaf *)node->schema;
-      char *path = lyd_path(node);
+      struct lyd_node_term *leaf = (struct lyd_node_term *)node;
+      struct lysc_node_leaf *lys_leaf = (struct lysc_node_leaf *)node->schema;
+      char *path = lyd_path(node, LYD_PATH_STD, NULL, 0);
       CHECK_NULL_MSG(path, &rc, error, "failed to allocate memory");
 
       rc = sr_val_set_xpath(&v[i], path);
       free(path);
       CHECK_RET(rc, error, "failed sr_val_set_xpath: %s", sr_strerror(rc));
 
-      rc = libyang_to_sysrepo_value(&v[i], lys_leaf->type.base, leaf->value);
+      rc = libyang_to_sysrepo_value(&v[i], lys_leaf->type->basetype, leaf->value);
       CHECK_RET(rc, error, "failed to set value: %s", sr_strerror(rc));
 
       i++;
     }
-    LY_TREE_DFS_END(new_root, next, node);
+    LYD_TREE_DFS_END(new_root, node);
   }
 
   *values = v;
@@ -485,10 +479,10 @@ int snabb_state_data_to_sysrepo(global_ctx_t *ctx, char *xpath,
 error:
   /* free lyd_node */
   if (NULL != root_set) {
-    ly_set_free(root_set);
+    ly_set_free(root_set, NULL);
   }
   if (NULL != root) {
-    lyd_free(root);
+    lyd_free_tree(root);
   }
   if (NULL != response) {
     free(response);
@@ -497,41 +491,44 @@ error:
 }
 
 int libyang_data_to_sysrepo(sr_session_ctx_t *session, struct lyd_node *root) {
-  const struct lyd_node *node = NULL, *next = NULL;
+  const struct lyd_node *node = NULL;
   char *xpath = NULL;
   int rc = SR_ERR_OK;
 
-  LY_TREE_DFS_BEGIN(root, next, node) {
+  LYD_TREE_DFS_BEGIN(root, node) {
     if (LYS_LEAF == node->schema->nodetype ||
         LYS_LEAFLIST == node->schema->nodetype) {
-      struct lyd_node_leaf_list *leaf = (struct lyd_node_leaf_list *)node;
+      struct lyd_node_term *leaf = (struct lyd_node_term *)node;
       /* skip key nodes, sysrepo will show error messages in the logs */
       bool skip = false;
       if (LYS_LIST == node->parent->schema->nodetype) {
-        struct lys_node_list *list =
-            (struct lys_node_list *)node->parent->schema;
-        for (int i = 0; i < list->keys_size; i++) {
-          if (0 == strncmp(list->keys[i]->name, node->schema->name,
-                           strlen(node->schema->name))) {
+        struct lysc_node_list *list =
+            (struct lysc_node_list *)node->parent->schema;
+
+	size_t name_len = strlen(node->schema->name);
+	struct lysc_node *li = NULL;
+	LY_LIST_FOR((struct lysc_node *) list, li) {
+          if (0 == strncmp(li->name, node->schema->name,
+                           name_len)) {
             skip = true;
           }
         }
       }
       if (!skip) {
-        xpath = lyd_path(node);
+        xpath = lyd_path(node, LYD_PATH_STD, NULL, 0);
         CHECK_NULL_MSG(xpath, &rc, error, "failed to allocate memory");
 
-        rc = sr_set_item_str(session, xpath, leaf->value_str, NULL, SR_EDIT_DEFAULT);
+        rc = sr_set_item_str(session, xpath, leaf->priv, NULL, SR_EDIT_DEFAULT);
         CHECK_RET(rc, error, "failed sr_set_item_str: %s", sr_strerror(rc));
         free(xpath);
         xpath = NULL;
       }
     }
-    LY_TREE_DFS_END(root, next, node);
+  LYD_TREE_DFS_END(root, node);
   }
 
   INF_MSG("apply the changes");
-  rc = sr_apply_changes(session, 0, 0);
+  rc = sr_apply_changes(session, 0);
   CHECK_RET(rc, error, "failed sr_apply_changes: %s", sr_strerror(rc));
 
   xpath = NULL;
@@ -570,7 +567,7 @@ int snabb_datastore_to_sysrepo(global_ctx_t *ctx) {
 
   /* free lyd_node */
   if (NULL != node) {
-    lyd_free(node);
+    lyd_free_tree(node);
   }
 
 error:
@@ -793,7 +790,7 @@ int sr_modified_operation(global_ctx_t *ctx, sr_val_t *val) {
   snabb_xpath = sr_xpath_to_snabb(val->xpath);
   CHECK_NULL_MSG(snabb_xpath, &rc, cleanup, "failed to allocate memory");
 
-  int len = 47 + strlen(snabb_xpath) + strlen(ctx->yang_model) + strlen(leaf);
+  size_t len = 47 + strlen(snabb_xpath) + strlen(ctx->yang_model) + strlen(leaf);
   message = malloc(sizeof(*message) * len);
   CHECK_NULL_MSG(message, &rc, cleanup, "failed to allocate memory");
 
@@ -826,7 +823,7 @@ int sr_deleted_operation(global_ctx_t *ctx, sr_val_t *val) {
   snabb_xpath = sr_xpath_to_snabb(val->xpath);
   CHECK_NULL_MSG(snabb_xpath, &rc, cleanup, "failed to allocate memory");
 
-  int len = 38 + strlen(snabb_xpath) + strlen(ctx->yang_model);
+  size_t len = 38 + strlen(snabb_xpath) + strlen(ctx->yang_model);
   message = malloc(sizeof(*message) * len);
   CHECK_NULL_MSG(message, &rc, cleanup, "failed to allocate memory");
 
@@ -848,7 +845,7 @@ cleanup:
   return rc;
 }
 
-int double_message_size(char **message, int *len) {
+int double_message_size(char **message, size_t *len) {
   int rc = SR_ERR_OK;
   char *tmp = NULL;
 
@@ -862,7 +859,7 @@ error:
   return rc;
 }
 
-int lyd_to_snabb_json(struct lyd_node *node, char **message, int *len) {
+int lyd_to_snabb_json(const struct lysc_node *node, char **message, size_t *len) {
   bool add_brackets = false;
   int rc = SR_ERR_OK;
 
@@ -876,30 +873,31 @@ int lyd_to_snabb_json(struct lyd_node *node, char **message, int *len) {
   }
 
   while (node) {
-    if (node->child && (node->schema->flags == LYS_CONTAINER ||
-                        node->schema->flags == LYS_LIST ||
-                        node->schema->flags == LYS_CHOICE)) {
-      if (*len < 7 + (int)strlen(*message)) {
+    const struct lysc_node *child = lysc_node_child(node);
+    if (child && (node->flags == LYS_CONTAINER ||
+                        node->flags == LYS_LIST ||
+                        node->flags == LYS_CHOICE)) {
+      if (*len < 7 + (size_t) strlen(*message)) {
         rc = double_message_size(message, len);
         CHECK_RET(rc, error, "failed to double the buffer size: %s",
                   sr_strerror(rc));
       }
-      strncat(*message, node->schema->name, *len);
+      strncat(*message, node->name, *len);
       strncat(*message, " { ", *len);
-      rc = lyd_to_snabb_json(node->child, message, len);
+      rc = lyd_to_snabb_json(child, message, len);
       CHECK_RET(rc, error, "failed lyd_to_snabb_json: %s", sr_strerror(rc));
       strncat(*message, " } ", *len);
     } else {
-      struct lyd_node_leaf_list *leaf = (struct lyd_node_leaf_list *)node;
-      if (*len < 4 + strlen(node->schema->name) + strlen(leaf->value_str) +
-                     (int)strlen(*message)) {
+      struct lyd_node_term *leaf = (struct lyd_node_term *)node;
+      if (*len < 4 + strlen(node->name) + strlen(leaf->priv)
+                 + strlen(*message)) {
         rc = double_message_size(message, len);
         CHECK_RET(rc, error, "failed to double the buffer size: %s",
                   sr_strerror(rc));
       }
-      strncat(*message, node->schema->name, *len);
+      strncat(*message, node->name, *len);
       strncat(*message, " ", *len);
-      strncat(*message, leaf->value_str, *len);
+      strncat(*message, leaf->priv, *len);
       strncat(*message, "; ", *len);
     }
     node = node->next;
@@ -921,7 +919,9 @@ int sr_created_operation(global_ctx_t *ctx, iter_change_t **p_iter,
   char *data = NULL;
   int rc = SR_ERR_OK;
   struct lyd_node *root = NULL;
+  struct ly_set *set = NULL;
   char *xpath = NULL;
+  LY_ERR ly_err = LY_SUCCESS;
 
   pthread_rwlock_rdlock(&ctx->iter_lock);
   sr_val_t *create_val = iter[begin].new_val;
@@ -930,10 +930,10 @@ int sr_created_operation(global_ctx_t *ctx, iter_change_t **p_iter,
     sr_val_t *val = iter[i].new_val;
     char *leaf = sr_val_to_str(val);
     if (root) {
-      lyd_new_path(root, ctx->libyang_ctx, val->xpath, (void *)leaf, 0, 1);
+      lyd_new_path(root, ctx->libyang_ctx, val->xpath, (void *)leaf, LYD_NEW_PATH_UPDATE, NULL);
     } else {
-      root =
-          lyd_new_path(NULL, ctx->libyang_ctx, val->xpath, (void *)leaf, 0, 1);
+      ly_err = lyd_new_path(NULL, ctx->libyang_ctx, val->xpath, (void *)leaf, LYD_NEW_PATH_UPDATE, &root);
+      CHECK_LY_RET_MSG(ly_err, cleanup, "failed lyd_new_path");
     }
     if (leaf) {
       free(leaf);
@@ -941,23 +941,22 @@ int sr_created_operation(global_ctx_t *ctx, iter_change_t **p_iter,
   }
   pthread_rwlock_unlock(&ctx->iter_lock);
 
-  struct ly_set *set = lyd_find_path(root, create_val->xpath);
-  CHECK_NULL(set, &rc, cleanup, "failed lyd_find_path with path %s",
-             create_val->xpath);
+  ly_err = lyd_find_xpath(root, create_val->xpath, &set);
+  CHECK_LY_RET_MSG(ly_err, cleanup, "failed lyd_find_xpath");
 
   data = malloc(sizeof(*data) * SNABB_MESSAGE_MAX);
   CHECK_NULL_MSG(data, &rc, cleanup, "failed to allocate memory");
   *data = '\0';
-  int data_len = SNABB_MESSAGE_MAX;
+  size_t data_len = SNABB_MESSAGE_MAX;
 
-  rc = lyd_to_snabb_json((*set->set.d)->child, &data, &data_len);
+  rc = lyd_to_snabb_json(lysc_node_child(*set->snodes), &data, &data_len);
   CHECK_RET(rc, cleanup, "failed lyd_to_snabb_json: %s", sr_strerror(rc));
 
   // snabb xpath can't have leafs at the end
   snabb_xpath = sr_xpath_to_snabb_no_end_keys(xpath);
   CHECK_NULL_MSG(snabb_xpath, &rc, cleanup, "failed to allocate memory");
 
-  int len = 47 + strlen(snabb_xpath) + strlen(data) + strlen(ctx->yang_model);
+  size_t len = 47 + strlen(snabb_xpath) + strlen(data) + strlen(ctx->yang_model);
   message = malloc(sizeof(*message) * len);
   CHECK_NULL_MSG(message, &rc, cleanup, "failed to allocate memory");
   snprintf(message, len, "add-config {path '%s'; config '%s'; schema %s;}",
@@ -979,10 +978,10 @@ cleanup:
     free(snabb_xpath);
   }
   if (set) {
-    ly_set_free(set);
+    ly_set_free(set, NULL);
   }
   if (root) {
-    lyd_free_withsiblings(root);
+    lyd_free_all(root);
   }
   return rc;
 }
