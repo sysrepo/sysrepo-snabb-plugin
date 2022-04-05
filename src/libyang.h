@@ -26,6 +26,7 @@
 
 bool list_or_container(sr_val_type_t);
 int transform_data_to_array(global_ctx_t *, char *, char *, struct lyd_node **);
+int transform_data_to_array2(global_ctx_t *, char *, char *, struct lyd_node **);
 int parse_yang_model(global_ctx_t *);
 
 #endif /* LIBYANG_H */

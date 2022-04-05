@@ -555,7 +555,7 @@ int snabb_datastore_to_sysrepo(global_ctx_t *ctx) {
   CHECK_RET(rc, error, "failed to send message to snabb socket: %s",
             sr_strerror(rc));
 
-  rc = transform_data_to_array(ctx, NULL, response, &node);
+  rc = transform_data_to_array2(ctx, NULL, response, &node);
   CHECK_RET(rc, error, "failed parse snabb data in libyang: %s",
             sr_strerror(rc));
 

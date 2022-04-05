@@ -59,7 +59,7 @@ int parse_yang_model(global_ctx_t *ctx) {
   }
 
   module = (struct lys_module *)ly_ctx_get_module(libyang_ctx, ctx->yang_model,
-                                                  NULL);
+                                                  "2021-11-08");
   CHECK_NULL_MSG(module, &rc, cleanup, "ly_ctx_get_module error");
 
   ctx->module = module;
@@ -179,7 +179,7 @@ int transform_data_to_array(global_ctx_t *ctx, char *xpath, char *data,
       tmp++;
       if ('{' == *last) {
         /* only list/container's have the last element '{' */
-        /* TODO check NULl */
+        /* TODO check NULL */
         ly_err = lyd_new_inner(parent, ctx->module, token, false, &parent);
         if (LY_SUCCESS != ly_err) {
           rc = SR_ERR_INTERNAL;
@@ -208,6 +208,161 @@ int transform_data_to_array(global_ctx_t *ctx, char *xpath, char *data,
 
   /* validate the libyang data nodes */
   if (LY_SUCCESS != lyd_validate_all(&top_parent, NULL, LYD_VALIDATE_PRESENT, NULL)) {
+    rc = SR_ERR_INTERNAL;
+    goto error;
+  }
+
+error:
+  *node = top_parent;
+
+  return rc;
+}
+
+
+bool is_list_instance(char *node_name) {
+  /* Check if a node is a list from the snabb-softwire-v3 YANG module. */
+  if (0 == strcmp(node_name, "softwire") ||
+      0 == strcmp(node_name, "instance") ||
+      0 == strcmp(node_name, "queue")) {
+    return true;
+  }
+  return false;
+}
+
+bool found_all_list_keys(char *list_name, char *list_keys) {
+  /* list_keys should look like this: "[key1='value1'][key2='value2']..." */
+  if (0 == strcmp(list_name, "softwire")) {
+    if (strstr(list_keys, "ipv4") && strstr(list_keys, "psid")) {
+      return true;
+    }
+  } else if (0 == strcmp(list_name, "instance")) {
+    if (strstr(list_keys, "device")) {
+      return true;
+    }
+  } else if(0 == strcmp(list_name, "queue")) {
+    if (strstr(list_keys, "id")) {
+      return true;
+    }
+  }
+  return false;
+}
+
+int transform_data_to_array2(global_ctx_t *ctx, char *xpath, char *data,
+                             struct lyd_node **node) {
+  int rc = SR_ERR_OK;
+  int i = 0, counter = 0;
+  struct lyd_node *parent = NULL, *top_parent = NULL;
+  LY_ERR ly_err = LY_SUCCESS;
+
+  /* replace escaped new lines */
+  for (i = 0; i < (int)strlen(data); i++) {
+    if ('\\' == data[i] && 'n' == data[i + 1]) {
+      data[i] = '\n';
+      i++;
+      data[i] = ' ';
+      counter++;
+    }
+  }
+  //counter = counter + 2;
+  //i = 0;
+
+  data = strstr(data, "\"") + 1; /* actual config data starts after " */
+
+
+  bool searching_for_list_keys = false;
+  char *list_name = NULL;
+  /* for storing key predicate for list instance definition,
+   * eg. [key='value'] */
+  char list_keys[256] = {0};
+
+  /* parse config lines one by one */
+  char *line = NULL;
+  while ((line = strsep(&data, "\n")) != NULL) {
+
+    if (strstr(line, "\"")) {
+      /* reached end of config data */
+      goto validate;
+    }
+
+    /* skip whitespace on the start of the line */
+    while (' ' == *line) {
+      line++;
+    }
+    char line_end = line[strlen(line) - 1];
+    char *line_remaining = line;
+    char *node_name = strsep(&line_remaining, " ");
+
+    switch (line_end) {
+      case '{': { /* current config line defines a container or list-instance */
+        if (is_list_instance(node_name)) {
+          /* To create a list instance we need to iterate over upcoming
+           * lines until we find the value of all list keys for this instance.
+           * Assumption: list nodes are always ordered so that list keys are on top. */
+          list_name = node_name;
+          searching_for_list_keys = true;
+        } else {
+          /* add container node */
+          ly_err = lyd_new_inner(parent, ctx->module, node_name, false, &parent);
+          if (LY_SUCCESS != ly_err) {
+            ERR("lyd_new_inner error (%d)", ly_err);
+            rc = SR_ERR_INTERNAL;
+            goto error;
+          }
+          if (NULL == top_parent) {
+            top_parent = parent;
+          }
+        }
+        break;
+      }
+      case '}': /* current line is the end of a container/list definition */
+        parent = (struct lyd_node *) (parent ? parent->parent : NULL);
+        break;
+      case ';': { /* current line defines a leaf node */
+        char *leaf_value = strsep(&line_remaining, " ");
+        leaf_value[strlen(leaf_value) - 1] = '\0'; // set ';' to '\0'
+
+        if (searching_for_list_keys) {
+          /* append list key */
+          char key_predicate[64] = {0};
+          snprintf(key_predicate, 64, "[%s='%s']", node_name, leaf_value);
+          strncat(list_keys, key_predicate, sizeof(list_keys));
+          if (found_all_list_keys(list_name, list_keys)) {
+            /* create the list instance */
+            ly_err = lyd_new_list2(parent, ctx->module, list_name, list_keys, false, &parent);
+            if (LY_SUCCESS != ly_err) {
+              ERR("lyd_new_list2 error (%d)", ly_err);
+              rc = SR_ERR_INTERNAL;
+              goto error;
+            }
+            searching_for_list_keys = false;
+            list_name = NULL;
+            memset(list_keys, 0, sizeof(list_keys));
+          }
+        } else {
+          /* create leaf node */
+          ly_err = lyd_new_term(parent, ctx->module, node_name, leaf_value, false, NULL);
+          if (LY_SUCCESS != ly_err) {
+            ERR("lyd_new_term error (%d)", ly_err);
+            rc = SR_ERR_INTERNAL;
+            goto error;
+          }
+        }
+        break;
+      }
+      default:
+        /* ignore line */
+        break;
+    }
+  }
+
+validate:
+  //ly_err = lyd_print_fd(1, top_parent, LYD_JSON, 0);
+
+  /* validate the libyang data nodes */
+  //struct lyd_node *diff = NULL;
+  ly_err = lyd_validate_all(&top_parent, NULL, LYD_VALIDATE_PRESENT | LYD_VALIDATE_NO_STATE, NULL);
+  if (LY_SUCCESS != ly_err) {
+    ERR("lyd_validate_all error (%d)", ly_err);
     rc = SR_ERR_INTERNAL;
     goto error;
   }
