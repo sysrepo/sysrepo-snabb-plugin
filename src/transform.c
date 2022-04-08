@@ -491,10 +491,14 @@ error:
 }
 
 int libyang_data_to_sysrepo(sr_session_ctx_t *session, struct lyd_node *root) {
-  const struct lyd_node *node = NULL;
-  char *xpath = NULL;
+  //const struct lyd_node *node = NULL;
+  struct lyd_node *changes = NULL;
+  const struct ly_ctx *session_ly_ctx = NULL;
+  sr_conn_ctx_t *conn = NULL;
+  //char *xpath = NULL;
   int rc = SR_ERR_OK;
 
+#if 0
   LYD_TREE_DFS_BEGIN(root, node) {
     if (LYS_LEAF == node->schema->nodetype ||
         LYS_LEAFLIST == node->schema->nodetype) {
@@ -526,16 +530,37 @@ int libyang_data_to_sysrepo(sr_session_ctx_t *session, struct lyd_node *root) {
     }
   LYD_TREE_DFS_END(root, node);
   }
+#endif
+  conn = sr_session_get_connection(session);
+  CHECK_NULL_MSG(conn, &rc, error,
+                 "sr_session_get_connection error: session is NULL");
+  session_ly_ctx = sr_acquire_context(conn);
+  CHECK_NULL_MSG(session_ly_ctx, &rc, error,
+                 "sr_acquire_context error: libyang context is NULL");
+
+  /* duplicate the data tree because sr_edit_batch requires that
+   * the edit tree is in the same ly_ctx as the session. */
+  rc = lyd_dup_siblings_to_ctx(root, session_ly_ctx, NULL, LYD_DUP_RECURSIVE, &changes);
+  CHECK_RET(rc, error, "failed lyd_dup_siblings_to_ctx: %d", rc);
+
+  rc = sr_edit_batch(session, changes, "merge");
+  CHECK_RET(rc, error, "failed sr_edit_batch: %s", sr_strerror(rc));
 
   INF_MSG("apply the changes");
   rc = sr_apply_changes(session, 0);
   CHECK_RET(rc, error, "failed sr_apply_changes: %s", sr_strerror(rc));
 
-  xpath = NULL;
+  //xpath = NULL;
 error:
-  if (NULL != xpath) {
-    free(xpath);
+  if (NULL != session_ly_ctx) {
+    sr_release_context(conn);
   }
+  if (NULL != changes) {
+    lyd_free_tree(changes);
+  }
+  //if (NULL != xpath) {
+  //  free(xpath);
+  //}
   return rc;
 }
 
