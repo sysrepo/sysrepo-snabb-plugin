@@ -404,16 +404,16 @@ int libyang_to_sysrepo_value(sr_val_t *value, LY_DATA_TYPE type, struct lyd_valu
 }
 
 int snabb_state_data_to_sysrepo(global_ctx_t *ctx, char *xpath,
-                                sr_val_t **values, size_t *values_cnt) {
+                                struct lyd_node **parent) {
   int rc = SR_ERR_OK;
   // TODO calculate size
   char message[SNABB_MESSAGE_MAX] = {0};
   char *response = NULL;
-  struct lyd_node *root = NULL;
-  struct lyd_node *new_root = NULL;
-  struct ly_set *root_set = NULL;
-  size_t cnt = 0;
-  LY_ERR ly_err = LY_SUCCESS;
+  //struct lyd_node *root = NULL;
+  //struct lyd_node *new_root = NULL;
+  //struct ly_set *root_set = NULL;
+  //size_t cnt = 0;
+  //LY_ERR ly_err = LY_SUCCESS;
 
   CHECK_RET(rc, error, "failed to format xpath: %s", sr_strerror(rc));
   char *snabb_xpath = sr_xpath_to_snabb(xpath);
@@ -426,10 +426,11 @@ int snabb_state_data_to_sysrepo(global_ctx_t *ctx, char *xpath,
   CHECK_RET(rc, error, "failed to send message to snabb socket: %s",
             sr_strerror(rc));
 
-  rc = transform_data_to_array(ctx, xpath, response, &root);
+  rc = transform_data_to_array2(ctx, xpath, response, parent, true);
   CHECK_RET(rc, error, "failed parse snabb data in libyang: %s",
             sr_strerror(rc));
 
+#if 0
   /* move to root node based on xpath */
   ly_err = lyd_find_xpath(root, xpath, &root_set);
   CHECK_LY_RET_MSG(ly_err, error, "failed lyd_find_xpath");
@@ -475,15 +476,16 @@ int snabb_state_data_to_sysrepo(global_ctx_t *ctx, char *xpath,
 
   *values = v;
   *values_cnt = cnt;
+#endif
 
 error:
   /* free lyd_node */
-  if (NULL != root_set) {
-    ly_set_free(root_set, NULL);
-  }
-  if (NULL != root) {
-    lyd_free_tree(root);
-  }
+  //if (NULL != root_set) {
+  //  ly_set_free(root_set, NULL);
+  //}
+  //if (NULL != root) {
+  //  lyd_free_tree(root);
+  //}
   if (NULL != response) {
     free(response);
   }
@@ -580,7 +582,7 @@ int snabb_datastore_to_sysrepo(global_ctx_t *ctx) {
   CHECK_RET(rc, error, "failed to send message to snabb socket: %s",
             sr_strerror(rc));
 
-  rc = transform_data_to_array2(ctx, NULL, response, &node);
+  rc = transform_data_to_array2(ctx, NULL, response, &node, false);
   CHECK_RET(rc, error, "failed parse snabb data in libyang: %s",
             sr_strerror(rc));
 

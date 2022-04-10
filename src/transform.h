@@ -42,7 +42,7 @@ void clear_context(global_ctx_t *ctx);
 
 int snabb_socket_reconnect(global_ctx_t *);
 
-int snabb_state_data_to_sysrepo(global_ctx_t *, char *, sr_val_t **, size_t *);
+int snabb_state_data_to_sysrepo(global_ctx_t *, char *, struct lyd_node **);
 bool is_new_snabb_command(iter_change_t *, iter_change_t *);
 
 void xpaths_to_snabb_socket(void *input);

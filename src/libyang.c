@@ -248,11 +248,12 @@ bool found_all_list_keys(char *list_name, char *list_keys) {
 }
 
 int transform_data_to_array2(global_ctx_t *ctx, char *xpath, char *data,
-                             struct lyd_node **node) {
+                             struct lyd_node **top_parent, bool state_data) {
   int rc = SR_ERR_OK;
   int i = 0, counter = 0;
-  struct lyd_node *parent = NULL, *top_parent = NULL;
+  struct lyd_node *parent = NULL;
   LY_ERR ly_err = LY_SUCCESS;
+  uint32_t validation_flags = 0;
 
   /* replace escaped new lines */
   for (i = 0; i < (int)strlen(data); i++) {
@@ -263,22 +264,22 @@ int transform_data_to_array2(global_ctx_t *ctx, char *xpath, char *data,
       counter++;
     }
   }
-  //counter = counter + 2;
-  //i = 0;
 
   data = strstr(data, "\"") + 1; /* actual config data starts after " */
+
+  if (NULL != *top_parent) {
+    parent = *top_parent;
+  }
 
 
   bool searching_for_list_keys = false;
   char *list_name = NULL;
-  /* for storing key predicate for list instance definition,
-   * eg. [key='value'] */
+  /* for storing key predicate for list instance definition, eg. [key='value'] */
   char list_keys[256] = {0};
 
   /* parse config lines one by one */
   char *line = NULL;
   while ((line = strsep(&data, "\n")) != NULL) {
-
     if (strstr(line, "\"")) {
       /* reached end of config data */
       goto validate;
@@ -308,8 +309,8 @@ int transform_data_to_array2(global_ctx_t *ctx, char *xpath, char *data,
             rc = SR_ERR_INTERNAL;
             goto error;
           }
-          if (NULL == top_parent) {
-            top_parent = parent;
+          if (NULL == *top_parent) {
+            *top_parent = parent;
           }
         }
         break;
@@ -359,16 +360,24 @@ validate:
   //ly_err = lyd_print_fd(1, top_parent, LYD_JSON, 0);
 
   /* validate the libyang data nodes */
-  //struct lyd_node *diff = NULL;
-  ly_err = lyd_validate_all(&top_parent, NULL, LYD_VALIDATE_PRESENT | LYD_VALIDATE_NO_STATE, NULL);
-  if (LY_SUCCESS != ly_err) {
-    ERR("lyd_validate_all error (%d)", ly_err);
-    rc = SR_ERR_INTERNAL;
-    goto error;
+  validation_flags = LYD_VALIDATE_PRESENT;
+  if (!state_data) {
+    validation_flags |= LYD_VALIDATE_NO_STATE;
+  }
+  if (!state_data) {
+    // TODO: for state data, lyd_validate_all returns LY_SUCCESS, but
+    // sets top_parent to NULL (which means there was an error), find out why
+
+    //struct lyd_node *diff = NULL;
+    ly_err = lyd_validate_all(top_parent, NULL, validation_flags, NULL);
+    if (LY_SUCCESS != ly_err) {
+      ERR("lyd_validate_all error (%d)", ly_err);
+      rc = SR_ERR_INTERNAL;
+      goto error;
+    }
   }
 
 error:
-  *node = top_parent;
 
   return rc;
 }
