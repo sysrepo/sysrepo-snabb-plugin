@@ -426,7 +426,7 @@ int snabb_state_data_to_sysrepo(global_ctx_t *ctx, char *xpath,
   CHECK_RET(rc, error, "failed to send message to snabb socket: %s",
             sr_strerror(rc));
 
-  rc = transform_data_to_array2(ctx, xpath, response, parent, true);
+  rc = transform_snabb_data_to_tree(ctx, xpath, response, parent, true);
   CHECK_RET(rc, error, "failed parse snabb data in libyang: %s",
             sr_strerror(rc));
 
@@ -582,7 +582,7 @@ int snabb_datastore_to_sysrepo(global_ctx_t *ctx) {
   CHECK_RET(rc, error, "failed to send message to snabb socket: %s",
             sr_strerror(rc));
 
-  rc = transform_data_to_array2(ctx, NULL, response, &node, false);
+  rc = transform_snabb_data_to_tree(ctx, NULL, response, &node, false);
   CHECK_RET(rc, error, "failed parse snabb data in libyang: %s",
             sr_strerror(rc));
 

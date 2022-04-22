@@ -80,6 +80,7 @@ bool list_or_container(sr_val_type_t type) {
          type == SR_CONTAINER_PRESENCE_T;
 }
 
+#if 0
 /* TODO refactor this */
 int transform_data_to_array(global_ctx_t *ctx, char *xpath, char *data,
                             struct lyd_node **node) {
@@ -217,7 +218,7 @@ error:
 
   return rc;
 }
-
+#endif
 
 bool is_list_instance(char *node_name) {
   /* Check if a node is a list from the snabb-softwire-v3 YANG module. */
@@ -247,37 +248,51 @@ bool found_all_list_keys(char *list_name, char *list_keys) {
   return false;
 }
 
-int transform_data_to_array2(global_ctx_t *ctx, char *xpath, char *data,
-                             struct lyd_node **top_parent, bool state_data) {
+/*
+ * Transform configuration or state data received over a snabb socket
+ * to a libyang data tree with *top_parent as the root node.
+ */
+int transform_snabb_data_to_tree(global_ctx_t *ctx, char *xpath, char *data,
+                                 struct lyd_node **top_parent, bool state_data) {
   int rc = SR_ERR_OK;
-  int i = 0, counter = 0;
+  int i = 0, len = 0;
   struct lyd_node *parent = NULL;
   LY_ERR ly_err = LY_SUCCESS;
   uint32_t validation_flags = 0;
 
+  if (NULL == data) {
+    ERR_MSG("transform_data_to_array2: data == NULL");
+    return -1;
+  }
+
   /* replace escaped new lines */
-  for (i = 0; i < (int)strlen(data); i++) {
+  len = strlen(data);
+  for (i = 0; i < (int) len; i++) {
     if ('\\' == data[i] && 'n' == data[i + 1]) {
       data[i] = '\n';
       i++;
       data[i] = ' ';
-      counter++;
     }
   }
 
   data = strstr(data, "\"") + 1; /* actual config data starts after " */
 
+  if (NULL == data) {
+    ERR_MSG("config/state data not present in given data string");
+    return -1;
+  }
+
   if (NULL != *top_parent) {
     parent = *top_parent;
   }
 
-
   bool searching_for_list_keys = false;
   char *list_name = NULL;
-  /* for storing key predicate for list instance definition, eg. [key='value'] */
+  /* for storing key predicate for list instance definition,
+   * eg. [key1='value1'][key2='value2'] */
   char list_keys[256] = {0};
 
-  /* parse config lines one by one */
+  /* transform config/state data lines to tree nodes */
   char *line = NULL;
   while ((line = strsep(&data, "\n")) != NULL) {
     if (strstr(line, "\"")) {
@@ -288,6 +303,9 @@ int transform_data_to_array2(global_ctx_t *ctx, char *xpath, char *data,
     /* skip whitespace on the start of the line */
     while (' ' == *line) {
       line++;
+    }
+    if (0 == strlen(line)) {
+      continue;
     }
     char line_end = line[strlen(line) - 1];
     char *line_remaining = line;
@@ -320,13 +338,13 @@ int transform_data_to_array2(global_ctx_t *ctx, char *xpath, char *data,
         break;
       case ';': { /* current line defines a leaf node */
         char *leaf_value = strsep(&line_remaining, " ");
-        leaf_value[strlen(leaf_value) - 1] = '\0'; // set ';' to '\0'
+        leaf_value[strlen(leaf_value) - 1] = '\0'; /* set ';' to '\0' */
 
         if (searching_for_list_keys) {
           /* append list key */
           char key_predicate[64] = {0};
           snprintf(key_predicate, 64, "[%s='%s']", node_name, leaf_value);
-          strncat(list_keys, key_predicate, sizeof(list_keys));
+          strncat(list_keys, key_predicate, sizeof(list_keys) - strlen(list_keys) - 1);
           if (found_all_list_keys(list_name, list_keys)) {
             /* create the list instance */
             ly_err = lyd_new_list2(parent, ctx->module, list_name, list_keys, false, &parent);
@@ -359,16 +377,9 @@ int transform_data_to_array2(global_ctx_t *ctx, char *xpath, char *data,
 validate:
   //ly_err = lyd_print_fd(1, top_parent, LYD_JSON, 0);
 
-  /* validate the libyang data nodes */
-  validation_flags = LYD_VALIDATE_PRESENT;
+  /* validate only if config data is present (lyd_validate_all requires config data) */
   if (!state_data) {
-    validation_flags |= LYD_VALIDATE_NO_STATE;
-  }
-  if (!state_data) {
-    // TODO: for state data, lyd_validate_all returns LY_SUCCESS, but
-    // sets top_parent to NULL (which means there was an error), find out why
-
-    //struct lyd_node *diff = NULL;
+    validation_flags = LYD_VALIDATE_PRESENT | LYD_VALIDATE_NO_STATE;
     ly_err = lyd_validate_all(top_parent, NULL, validation_flags, NULL);
     if (LY_SUCCESS != ly_err) {
       ERR("lyd_validate_all error (%d)", ly_err);
@@ -378,6 +389,5 @@ validate:
   }
 
 error:
-
   return rc;
 }
