@@ -586,7 +586,7 @@ int snabb_datastore_to_sysrepo(global_ctx_t *ctx) {
   CHECK_RET(rc, error, "failed parse snabb data in libyang: %s",
             sr_strerror(rc));
 
-  /* copy snabb daat to startup datastore */
+  /* copy snabb data to startup datastore */
   INF_MSG("appply snabb data to sysrepo startup datastore");
   rc = libyang_data_to_sysrepo(ctx->startup_sess, node);
   CHECK_RET(rc, error, "failed to apply libyang data to sysrepo: %s",
@@ -776,7 +776,7 @@ cleanup:
 
 bool is_new_snabb_command(iter_change_t *iter, iter_change_t *prev) {
   /* edge case, can't add/remove on XPATH /softwire-config/instance only edit */
-  char *cmp_xpath = "/snabb-softwire-v2:softwire-config/instance";
+  char *cmp_xpath = "/snabb-softwire-v3:softwire-config/instance";
   sr_val_t *tmp_val =
       (SR_OP_DELETED == iter->oper) ? iter->old_val : iter->new_val;
   if (0 == strncmp(cmp_xpath, tmp_val->xpath, strlen(cmp_xpath))) {
@@ -887,7 +887,7 @@ error:
   return rc;
 }
 
-int lyd_to_snabb_json(const struct lysc_node *node, char **message, size_t *len) {
+int lyd_to_snabb_json(const struct lyd_node *node, char **message, size_t *len) {
   bool add_brackets = false;
   int rc = SR_ERR_OK;
 
@@ -901,31 +901,32 @@ int lyd_to_snabb_json(const struct lysc_node *node, char **message, size_t *len)
   }
 
   while (node) {
-    const struct lysc_node *child = lysc_node_child(node);
-    if (child && (node->flags == LYS_CONTAINER ||
-                        node->flags == LYS_LIST ||
-                        node->flags == LYS_CHOICE)) {
+    const struct lyd_node *child = lyd_child(node);
+    if (child && (node->schema->nodetype == LYS_CONTAINER ||
+                  node->schema->nodetype == LYS_LIST ||
+                  node->schema->nodetype == LYS_CHOICE)) {
       if (*len < 7 + (size_t) strlen(*message)) {
         rc = double_message_size(message, len);
         CHECK_RET(rc, error, "failed to double the buffer size: %s",
                   sr_strerror(rc));
       }
-      strncat(*message, node->name, *len);
+      strncat(*message, node->schema->name, *len);
       strncat(*message, " { ", *len);
       rc = lyd_to_snabb_json(child, message, len);
       CHECK_RET(rc, error, "failed lyd_to_snabb_json: %s", sr_strerror(rc));
       strncat(*message, " } ", *len);
     } else {
-      struct lyd_node_term *leaf = (struct lyd_node_term *)node;
-      if (*len < 4 + strlen(node->name) + strlen(leaf->priv)
-                 + strlen(*message)) {
+      const char *leaf_value = lyd_get_value(node);
+      CHECK_NULL_MSG(leaf_value, &rc, error, "failed to get leaf value");
+
+      if (*len < 4 + strlen(node->schema->name) + strlen(leaf_value) + strlen(*message)) {
         rc = double_message_size(message, len);
         CHECK_RET(rc, error, "failed to double the buffer size: %s",
                   sr_strerror(rc));
       }
-      strncat(*message, node->name, *len);
+      strncat(*message, node->schema->name, *len);
       strncat(*message, " ", *len);
-      strncat(*message, leaf->priv, *len);
+      strncat(*message, leaf_value, *len);
       strncat(*message, "; ", *len);
     }
     node = node->next;
@@ -944,7 +945,7 @@ int sr_created_operation(global_ctx_t *ctx, iter_change_t **p_iter,
   iter_change_t *iter = *p_iter;
   char *snabb_xpath = NULL;
   char *message = NULL;
-  char *data = NULL;
+  char *config_data = NULL;
   int rc = SR_ERR_OK;
   struct lyd_node *root = NULL;
   struct ly_set *set = NULL;
@@ -972,23 +973,34 @@ int sr_created_operation(global_ctx_t *ctx, iter_change_t **p_iter,
   ly_err = lyd_find_xpath(root, create_val->xpath, &set);
   CHECK_LY_RET_MSG(ly_err, cleanup, "failed lyd_find_xpath");
 
-  data = malloc(sizeof(*data) * SNABB_MESSAGE_MAX);
-  CHECK_NULL_MSG(data, &rc, cleanup, "failed to allocate memory");
-  *data = '\0';
-  size_t data_len = SNABB_MESSAGE_MAX;
+  if (end - begin == 1 && set->dnodes[0]->schema->nodetype == LYS_LEAF) {
+    /* if only a single leaf node was created, use set-config */
+    snabb_xpath = sr_xpath_to_snabb_no_end_keys(xpath);
+    CHECK_NULL_MSG(snabb_xpath, &rc, cleanup, "failed to allocate memory");
+    message = calloc(SNABB_MESSAGE_MAX, sizeof(char));
+    CHECK_NULL_MSG(message, &rc, cleanup, "failed to allocate memory");
 
-  rc = lyd_to_snabb_json(lysc_node_child(*set->snodes), &data, &data_len);
-  CHECK_RET(rc, cleanup, "failed lyd_to_snabb_json: %s", sr_strerror(rc));
+    size_t len = SNABB_MESSAGE_MAX;
+    snprintf(message, len, "set-config {path '%s'; config '%s'; schema %s;}",
+             snabb_xpath, lyd_get_value(set->dnodes[0]), ctx->yang_model);
+  } else {
+    config_data = calloc(SNABB_MESSAGE_MAX, sizeof(char));
+    CHECK_NULL_MSG(config_data, &rc, cleanup, "failed to allocate memory");
+    size_t data_len = SNABB_MESSAGE_MAX;
 
-  // snabb xpath can't have leafs at the end
-  snabb_xpath = sr_xpath_to_snabb_no_end_keys(xpath);
-  CHECK_NULL_MSG(snabb_xpath, &rc, cleanup, "failed to allocate memory");
+    rc = lyd_to_snabb_json(lyd_child(*set->dnodes), &config_data, &data_len);
+    CHECK_RET(rc, cleanup, "failed lyd_to_snabb_json: %s", sr_strerror(rc));
 
-  size_t len = 47 + strlen(snabb_xpath) + strlen(data) + strlen(ctx->yang_model);
-  message = malloc(sizeof(*message) * len);
-  CHECK_NULL_MSG(message, &rc, cleanup, "failed to allocate memory");
-  snprintf(message, len, "add-config {path '%s'; config '%s'; schema %s;}",
-           snabb_xpath, data, ctx->yang_model);
+    // snabb xpath can't have leafs at the end
+    snabb_xpath = sr_xpath_to_snabb_no_end_keys(xpath);
+    CHECK_NULL_MSG(snabb_xpath, &rc, cleanup, "failed to allocate memory");
+
+    size_t len = 47 + strlen(snabb_xpath) + strlen(config_data) + strlen(ctx->yang_model);
+    message = malloc(sizeof(*message) * len);
+    CHECK_NULL_MSG(message, &rc, cleanup, "failed to allocate memory");
+    snprintf(message, len, "add-config {path '%s'; config '%s'; schema %s;}",
+             snabb_xpath, config_data, ctx->yang_model);
+  }
 
   /* send to socket */
   rc = socket_send(ctx, message, false);
@@ -999,8 +1011,8 @@ cleanup:
   if (message) {
     free(message);
   }
-  if (data) {
-    free(data);
+  if (config_data) {
+    free(config_data);
   }
   if (snabb_xpath) {
     free(snabb_xpath);
