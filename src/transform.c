@@ -648,6 +648,11 @@ void clear_context(global_ctx_t *ctx) {
     thpool_destroy(*ctx->threads);
   }
 
+  sr_conn_ctx_t *conn = sr_session_get_connection(ctx->sess);
+  if (ctx->libyang_ctx) {
+    sr_release_context(conn);
+    ctx->libyang_ctx = NULL;
+  }
   /* free sysrepo subscription */
   if (ctx->sess && ctx->sub) {
     sr_unsubscribe(ctx->sub);
@@ -673,11 +678,7 @@ void clear_context(global_ctx_t *ctx) {
   if (ctx->startup_conn) {
     sr_disconnect(ctx->startup_conn);
   }
-  /*
-    if (ctx->libyang_ctx) {
-      ly_ctx_destroy(ctx->libyang_ctx, NULL);
-    }
-  */
+
   /* free global context */
   INF("%s plugin cleanup finished.", ctx->yang_model);
   free(ctx);
