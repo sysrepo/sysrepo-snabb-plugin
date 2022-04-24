@@ -42,6 +42,8 @@
 
 #define DATASTORE_COMMAND_MAX 128
 
+int lyd_to_snabb_json(const struct lyd_node *node, char **message, size_t *len, bool add_brackets);
+
 /* transform xpath to snabb compatible format
  * 1) remove yang model from xpath
  * 2) remove "'" from the key value
@@ -604,6 +606,44 @@ error:
   return rc;
 }
 
+/*
+ * Apply configuration from the startup datastore to snabb.
+ */
+int sysrepo_datastore_to_snabb(global_ctx_t *ctx) {
+  int rc = SR_ERR_OK;
+  sr_data_t *startup_data = NULL;
+  char *config_str = NULL;
+  char *message = NULL;
+  const char *config_xpath = "/snabb-softwire-v3:softwire-config";
+
+  rc = sr_get_subtree(ctx->startup_sess, config_xpath, 0, &startup_data);
+  CHECK_RET(rc, cleanup, "failed to get startup data tree: %s",
+            sr_strerror(rc));
+
+  config_str = calloc(SNABB_MESSAGE_MAX, sizeof(char));
+  CHECK_NULL_MSG(config_str, &rc, cleanup, "failed to allocate memory");
+  size_t config_len = SNABB_MESSAGE_MAX;
+
+  rc = lyd_to_snabb_json(startup_data->tree, &config_str, &config_len, false);
+  CHECK_RET(rc, cleanup, "failed lyd_to_snabb_json: %s", sr_strerror(rc));
+
+  size_t len = 40 + strlen(config_xpath) + strlen(config_str) + strlen(ctx->yang_model);
+  message = malloc(sizeof(*message) * len);
+  CHECK_NULL_MSG(message, &rc, cleanup, "failed to allocate memory");
+  snprintf(message, len, "set-config {config '%s'; schema %s;}",
+           config_str, ctx->yang_model);
+
+  rc = socket_send(ctx, message, false);
+  CHECK_RET(rc, cleanup, "failed to send message to snabb socket: %s",
+            sr_strerror(rc));
+cleanup:
+  sr_release_data(startup_data);
+  free(config_str);
+  free(message);
+
+  return rc;
+}
+
 int sync_datastores(global_ctx_t *ctx) {
   char datastore_command[DATASTORE_COMMAND_MAX] = {0};
   int rc = SR_ERR_OK;
@@ -619,7 +659,7 @@ int sync_datastores(global_ctx_t *ctx) {
   if (fgetc(fp) != EOF) {
     /* copy the sysrepo startup datastore to snabb */
     INF_MSG("copy sysrepo data to snabb");
-    // rc = sysrepo_datastore_to_snabb(ctx);
+    rc = sysrepo_datastore_to_snabb(ctx);
     CHECK_RET(rc, cleanup, "failed to apply sysrepo startup data to snabb: %s",
               sr_strerror(rc));
   } else {
@@ -887,16 +927,15 @@ error:
   return rc;
 }
 
-int lyd_to_snabb_json(const struct lyd_node *node, char **message, size_t *len) {
-  bool add_brackets = false;
+int lyd_to_snabb_json(const struct lyd_node *node, char **message, size_t *len,
+                      bool add_brackets) {
   int rc = SR_ERR_OK;
 
   if (!len || !message || !*message) {
     return SR_ERR_INTERNAL;
   }
 
-  if (**message == '\0') {
-    add_brackets = true;
+  if (add_brackets) {
     strncat(*message, "{ ", *len);
   }
 
@@ -905,21 +944,22 @@ int lyd_to_snabb_json(const struct lyd_node *node, char **message, size_t *len) 
     if (child && (node->schema->nodetype == LYS_CONTAINER ||
                   node->schema->nodetype == LYS_LIST ||
                   node->schema->nodetype == LYS_CHOICE)) {
-      if (*len < 7 + (size_t) strlen(*message)) {
+      if (*len < 9 + (size_t) strlen(*message) + strlen(node->schema->name)) {
         rc = double_message_size(message, len);
         CHECK_RET(rc, error, "failed to double the buffer size: %s",
                   sr_strerror(rc));
       }
       strncat(*message, node->schema->name, *len);
       strncat(*message, " { ", *len);
-      rc = lyd_to_snabb_json(child, message, len);
+      rc = lyd_to_snabb_json(child, message, len, false);
       CHECK_RET(rc, error, "failed lyd_to_snabb_json: %s", sr_strerror(rc));
       strncat(*message, " } ", *len);
-    } else {
+    } else if (node->schema->nodetype == LYS_LEAF ||
+               node->schema->nodetype == LYS_LEAFLIST) {
       const char *leaf_value = lyd_get_value(node);
       CHECK_NULL_MSG(leaf_value, &rc, error, "failed to get leaf value");
 
-      if (*len < 4 + strlen(node->schema->name) + strlen(leaf_value) + strlen(*message)) {
+      if (*len < 6 + strlen(node->schema->name) + strlen(leaf_value) + strlen(*message)) {
         rc = double_message_size(message, len);
         CHECK_RET(rc, error, "failed to double the buffer size: %s",
                   sr_strerror(rc));
@@ -988,7 +1028,7 @@ int sr_created_operation(global_ctx_t *ctx, iter_change_t **p_iter,
     CHECK_NULL_MSG(config_data, &rc, cleanup, "failed to allocate memory");
     size_t data_len = SNABB_MESSAGE_MAX;
 
-    rc = lyd_to_snabb_json(lyd_child(*set->dnodes), &config_data, &data_len);
+    rc = lyd_to_snabb_json(lyd_child(*set->dnodes), &config_data, &data_len, true);
     CHECK_RET(rc, cleanup, "failed lyd_to_snabb_json: %s", sr_strerror(rc));
 
     // snabb xpath can't have leafs at the end
