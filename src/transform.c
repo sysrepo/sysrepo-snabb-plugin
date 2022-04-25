@@ -42,7 +42,7 @@
 
 #define DATASTORE_COMMAND_MAX 128
 
-int lyd_to_snabb_json(const struct lyd_node *node, char **message, size_t *len, bool add_brackets);
+int lyd_tree_to_snabb_str(const struct lyd_node *node, char **message, size_t *size, bool add_brackets);
 
 /* transform xpath to snabb compatible format
  * 1) remove yang model from xpath
@@ -624,8 +624,8 @@ int sysrepo_datastore_to_snabb(global_ctx_t *ctx) {
   CHECK_NULL_MSG(config_str, &rc, cleanup, "failed to allocate memory");
   size_t config_len = SNABB_MESSAGE_MAX;
 
-  rc = lyd_to_snabb_json(startup_data->tree, &config_str, &config_len, false);
-  CHECK_RET(rc, cleanup, "failed lyd_to_snabb_json: %s", sr_strerror(rc));
+  rc = lyd_tree_to_snabb_str(startup_data->tree, &config_str, &config_len, false);
+  CHECK_RET(rc, cleanup, "failed lyd_tree_to_snabb_str: %s", sr_strerror(rc));
 
   size_t len = 40 + strlen(config_xpath) + strlen(config_str) + strlen(ctx->yang_model);
   message = malloc(sizeof(*message) * len);
@@ -927,53 +927,87 @@ error:
   return rc;
 }
 
-int lyd_to_snabb_json(const struct lyd_node *node, char **message, size_t *len,
-                      bool add_brackets) {
+/*
+ * Serialize a configuration data tree for sending to snabb over a socket.
+ */
+int lyd_tree_to_snabb_str(const struct lyd_node *node, char **message, size_t *size,
+                          bool add_brackets) {
   int rc = SR_ERR_OK;
+  size_t current_msg_len = 0;
+  int n_printed = 0;
 
-  if (!len || !message || !*message) {
+  if (!size || !message || !*message) {
     return SR_ERR_INTERNAL;
   }
 
   if (add_brackets) {
-    strncat(*message, "{ ", *len);
+    strncat(*message, "{ ", *size);
   }
 
   while (node) {
+    char node_str[128] = {0};
     const struct lyd_node *child = lyd_child(node);
+    current_msg_len = strlen(*message);
+
     if (child && (node->schema->nodetype == LYS_CONTAINER ||
                   node->schema->nodetype == LYS_LIST ||
                   node->schema->nodetype == LYS_CHOICE)) {
-      if (*len < 9 + (size_t) strlen(*message) + strlen(node->schema->name)) {
-        rc = double_message_size(message, len);
+      n_printed = snprintf(node_str, sizeof(node_str), "%s {", node->schema->name);
+      if (n_printed >= (int) sizeof(node_str)) {
+        ERR_MSG("snprintf error: node_str buffer too small for current node");
+        rc = SR_ERR_INTERNAL;
+        goto error;
+      }
+
+      if (*size < current_msg_len + strlen(node_str) + 1) {
+        rc = double_message_size(message, size);
         CHECK_RET(rc, error, "failed to double the buffer size: %s",
                   sr_strerror(rc));
       }
-      strncat(*message, node->schema->name, *len);
-      strncat(*message, " { ", *len);
-      rc = lyd_to_snabb_json(child, message, len, false);
-      CHECK_RET(rc, error, "failed lyd_to_snabb_json: %s", sr_strerror(rc));
-      strncat(*message, " } ", *len);
+      strncat(*message + current_msg_len, node_str, *size - current_msg_len - 1);
+
+      rc = lyd_tree_to_snabb_str(child, message, size, false);
+      CHECK_RET(rc, error, "failed lyd_tree_to_snabb_str: %s", sr_strerror(rc));
+
+      /* check size again after returning from recursive call and close brackets */
+      current_msg_len = strlen(*message);
+      if (*size < current_msg_len + 4) {
+        rc = double_message_size(message, size);
+        CHECK_RET(rc, error, "failed to double the buffer size: %s",
+                  sr_strerror(rc));
+      }
+      strncat(*message + current_msg_len, " } ", *size - current_msg_len - 1);
+
     } else if (node->schema->nodetype == LYS_LEAF ||
                node->schema->nodetype == LYS_LEAFLIST) {
       const char *leaf_value = lyd_get_value(node);
       CHECK_NULL_MSG(leaf_value, &rc, error, "failed to get leaf value");
 
-      if (*len < 6 + strlen(node->schema->name) + strlen(leaf_value) + strlen(*message)) {
-        rc = double_message_size(message, len);
+      n_printed = snprintf(node_str, sizeof(node_str), "%s %s; ", node->schema->name, leaf_value);
+      if (n_printed >= (int) sizeof(node_str)) {
+        ERR_MSG("snprintf error: node_str buffer too small for current node");
+        rc = SR_ERR_INTERNAL;
+        goto error;
+      }
+
+      if (*size < current_msg_len + strlen(node_str) + 1) {
+        rc = double_message_size(message, size);
         CHECK_RET(rc, error, "failed to double the buffer size: %s",
                   sr_strerror(rc));
       }
-      strncat(*message, node->schema->name, *len);
-      strncat(*message, " ", *len);
-      strncat(*message, leaf_value, *len);
-      strncat(*message, "; ", *len);
+      strncat(*message + current_msg_len, node_str, *size - current_msg_len - 1);
     }
     node = node->next;
   }
 
   if (add_brackets) {
-    strncat(*message, "}", *len);
+    current_msg_len = strlen(*message);
+    if (*size < current_msg_len + 2) {
+      rc = double_message_size(message, size);
+      CHECK_RET(rc, error, "failed to double the buffer size: %s",
+                sr_strerror(rc));
+    }
+    strncat(*message + current_msg_len, "}", *size - current_msg_len - 1);
   }
 
 error:
@@ -1028,8 +1062,8 @@ int sr_created_operation(global_ctx_t *ctx, iter_change_t **p_iter,
     CHECK_NULL_MSG(config_data, &rc, cleanup, "failed to allocate memory");
     size_t data_len = SNABB_MESSAGE_MAX;
 
-    rc = lyd_to_snabb_json(lyd_child(*set->dnodes), &config_data, &data_len, true);
-    CHECK_RET(rc, cleanup, "failed lyd_to_snabb_json: %s", sr_strerror(rc));
+    rc = lyd_tree_to_snabb_str(lyd_child(*set->dnodes), &config_data, &data_len, true);
+    CHECK_RET(rc, cleanup, "failed lyd_tree_to_snabb_str: %s", sr_strerror(rc));
 
     // snabb xpath can't have leafs at the end
     snabb_xpath = sr_xpath_to_snabb_no_end_keys(xpath);
