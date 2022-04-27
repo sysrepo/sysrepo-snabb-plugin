@@ -183,15 +183,11 @@ static int state_data_cb(sr_session_ctx_t *session, uint32_t sub_id, const char 
   int rc = SR_ERR_OK;
   const struct ly_ctx *ly_ctx = NULL;
   sr_conn_ctx_t *conn = NULL;
-  //char *value_string = NULL;
-  //sr_val_t *values = NULL;
-  //size_t values_cnt = 0;
   LY_ERR ly_err = LY_SUCCESS;
 
   INF_MSG("state_data_cb");
   global_ctx_t *ctx = private_data;
-  //rc = snabb_state_data_to_sysrepo(ctx, (char *)path, parent, &values, &values_cnt);
-  //CHECK_RET(rc, error, "failed to load state data: %s", sr_strerror(rc));
+
   if (*parent == NULL) {
     conn = sr_session_get_connection(session);
     CHECK_NULL_MSG(conn, &rc, error,
@@ -208,26 +204,13 @@ static int state_data_cb(sr_session_ctx_t *session, uint32_t sub_id, const char 
     CHECK_LY_RET_MSG(ly_err, error, "failed lyd_new_path");
   }
 
-  rc = snabb_state_data_to_sysrepo(ctx, (char *)path, parent);//, &values, &values_cnt);
+  rc = snabb_state_data_to_sysrepo(ctx, (char *)path, parent);
   CHECK_RET(rc, error, "failed to load state data: %s", sr_strerror(rc));
-
-  //for (size_t i = 0; i < values_cnt; i++) {
-  //  value_string = sr_val_to_str(&values[i]);
-  //  lyd_new_path(*parent, NULL, values[i].xpath, value_string, 0, 0);
-  //  free(value_string);
-  //  value_string = NULL;
-  //}
 
 error:
   if (ly_ctx != NULL) {
     sr_release_context(conn);
   }
-  //if (values != NULL) {
-  //  sr_free_values(values, values_cnt);
-  //  values = NULL;
-  //  values_cnt = 0;
-  //}
-
   return rc;
 }
 

@@ -411,11 +411,6 @@ int snabb_state_data_to_sysrepo(global_ctx_t *ctx, char *xpath,
   // TODO calculate size
   char message[SNABB_MESSAGE_MAX] = {0};
   char *response = NULL;
-  //struct lyd_node *root = NULL;
-  //struct lyd_node *new_root = NULL;
-  //struct ly_set *root_set = NULL;
-  //size_t cnt = 0;
-  //LY_ERR ly_err = LY_SUCCESS;
 
   CHECK_RET(rc, error, "failed to format xpath: %s", sr_strerror(rc));
   char *snabb_xpath = sr_xpath_to_snabb(xpath);
@@ -432,62 +427,7 @@ int snabb_state_data_to_sysrepo(global_ctx_t *ctx, char *xpath,
   CHECK_RET(rc, error, "failed parse snabb data in libyang: %s",
             sr_strerror(rc));
 
-#if 0
-  /* move to root node based on xpath */
-  ly_err = lyd_find_xpath(root, xpath, &root_set);
-  CHECK_LY_RET_MSG(ly_err, error, "failed lyd_find_xpath");
-  if (root_set->count <= 0) {
-    ERR("lyd_find_path did not find any data for xpath %s", xpath);
-    goto error;
-  }
-  new_root = root_set->dnodes[0];
-
-  const struct lyd_node *node = NULL;
-  LYD_TREE_DFS_BEGIN(new_root, node) {
-    if (LYS_LEAF == node->schema->nodetype ||
-        LYS_LEAFLIST == node->schema->nodetype) {
-      cnt++;
-    }
-    LYD_TREE_DFS_END(new_root, node);
-  }
-
-  sr_val_t *v = NULL;
-  rc = sr_new_values(cnt, &v);
-  CHECK_RET(rc, error, "failed sr_new_values: %s", sr_strerror(rc));
-
-  int i = 0;
-  LYD_TREE_DFS_BEGIN(new_root, node) {
-    if (LYS_LEAF == node->schema->nodetype ||
-        LYS_LEAFLIST == node->schema->nodetype) {
-      struct lyd_node_term *leaf = (struct lyd_node_term *)node;
-      struct lysc_node_leaf *lys_leaf = (struct lysc_node_leaf *)node->schema;
-      char *path = lyd_path(node, LYD_PATH_STD, NULL, 0);
-      CHECK_NULL_MSG(path, &rc, error, "failed to allocate memory");
-
-      rc = sr_val_set_xpath(&v[i], path);
-      free(path);
-      CHECK_RET(rc, error, "failed sr_val_set_xpath: %s", sr_strerror(rc));
-
-      rc = libyang_to_sysrepo_value(&v[i], lys_leaf->type->basetype, leaf->value);
-      CHECK_RET(rc, error, "failed to set value: %s", sr_strerror(rc));
-
-      i++;
-    }
-    LYD_TREE_DFS_END(new_root, node);
-  }
-
-  *values = v;
-  *values_cnt = cnt;
-#endif
-
 error:
-  /* free lyd_node */
-  //if (NULL != root_set) {
-  //  ly_set_free(root_set, NULL);
-  //}
-  //if (NULL != root) {
-  //  lyd_free_tree(root);
-  //}
   if (NULL != response) {
     free(response);
   }
@@ -495,46 +435,11 @@ error:
 }
 
 int libyang_data_to_sysrepo(sr_session_ctx_t *session, struct lyd_node *root) {
-  //const struct lyd_node *node = NULL;
   struct lyd_node *changes = NULL;
   const struct ly_ctx *session_ly_ctx = NULL;
   sr_conn_ctx_t *conn = NULL;
-  //char *xpath = NULL;
   int rc = SR_ERR_OK;
 
-#if 0
-  LYD_TREE_DFS_BEGIN(root, node) {
-    if (LYS_LEAF == node->schema->nodetype ||
-        LYS_LEAFLIST == node->schema->nodetype) {
-      struct lyd_node_term *leaf = (struct lyd_node_term *)node;
-      /* skip key nodes, sysrepo will show error messages in the logs */
-      bool skip = false;
-      if (LYS_LIST == node->parent->schema->nodetype) {
-        struct lysc_node_list *list =
-            (struct lysc_node_list *)node->parent->schema;
-
-	size_t name_len = strlen(node->schema->name);
-	struct lysc_node *li = NULL;
-	LY_LIST_FOR((struct lysc_node *) list, li) {
-          if (0 == strncmp(li->name, node->schema->name,
-                           name_len)) {
-            skip = true;
-          }
-        }
-      }
-      if (!skip) {
-        xpath = lyd_path(node, LYD_PATH_STD, NULL, 0);
-        CHECK_NULL_MSG(xpath, &rc, error, "failed to allocate memory");
-
-        rc = sr_set_item_str(session, xpath, leaf->priv, NULL, SR_EDIT_DEFAULT);
-        CHECK_RET(rc, error, "failed sr_set_item_str: %s", sr_strerror(rc));
-        free(xpath);
-        xpath = NULL;
-      }
-    }
-  LYD_TREE_DFS_END(root, node);
-  }
-#endif
   conn = sr_session_get_connection(session);
   CHECK_NULL_MSG(conn, &rc, error,
                  "sr_session_get_connection error: session is NULL");
@@ -554,7 +459,6 @@ int libyang_data_to_sysrepo(sr_session_ctx_t *session, struct lyd_node *root) {
   rc = sr_apply_changes(session, 0);
   CHECK_RET(rc, error, "failed sr_apply_changes: %s", sr_strerror(rc));
 
-  //xpath = NULL;
 error:
   if (NULL != session_ly_ctx) {
     sr_release_context(conn);
@@ -562,9 +466,6 @@ error:
   if (NULL != changes) {
     lyd_free_tree(changes);
   }
-  //if (NULL != xpath) {
-  //  free(xpath);
-  //}
   return rc;
 }
 

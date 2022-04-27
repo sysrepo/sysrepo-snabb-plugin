@@ -80,146 +80,6 @@ bool list_or_container(sr_val_type_t type) {
          type == SR_CONTAINER_PRESENCE_T;
 }
 
-#if 0
-/* TODO refactor this */
-int transform_data_to_array(global_ctx_t *ctx, char *xpath, char *data,
-                            struct lyd_node **node) {
-  int rc = SR_ERR_OK;
-  char *token = NULL, *tmp = NULL, *last = NULL;
-  int i = 0, counter = 0;
-  struct lyd_node *parent = NULL, *top_parent = NULL, *check = NULL;
-  LY_ERR ly_err = LY_SUCCESS;
-
-  /* replace escaped new lines */
-  for (i = 0; i < (int)strlen(data); i++) {
-    if ('\\' == data[i] && 'n' == data[i + 1]) {
-      data[i] = '\n';
-      i++;
-      data[i] = ' ';
-      counter++;
-    }
-  }
-  counter = counter + 2;
-
-  /* transform xpath to lyd_node's*/
-  if (NULL != xpath) {
-    sr_xpath_ctx_t state = {0};
-    char *xpath_elem = NULL;
-    while (true) {
-      if (NULL == xpath_elem) {
-        xpath_elem = sr_xpath_next_node(xpath, &state);
-      } else {
-        xpath_elem = sr_xpath_next_node(NULL, &state);
-      }
-      if (NULL == xpath_elem) {
-        break;
-      }
-
-      ly_err = lyd_new_inner(parent, ctx->module, xpath_elem, false, &parent);
-      CHECK_LY_RET_MSG(ly_err, error, "failed lyd_new_path");
-      if (LY_SUCCESS != ly_err) {
-        rc = SR_ERR_INTERNAL;
-        goto error;
-      }
-
-      if (NULL == top_parent) {
-        top_parent = parent;
-      }
-
-      /* add key values */
-      while (true) {
-        char *key, *value, *key_copy;
-        /* iterate over key value pairs in xpath */
-        key = sr_xpath_next_key_name(NULL, &state);
-        if (NULL == key) {
-          break;
-        }
-        key_copy = strdup(key);
-        value = sr_xpath_next_key_value(NULL, &state);
-
-        ly_err = lyd_new_term(parent, ctx->module, key_copy, value, false, NULL);
-        if (LY_SUCCESS != ly_err) {
-          rc = SR_ERR_INTERNAL;
-          goto error;
-        }
-
-        free(key_copy);
-      }
-    }
-  }
-
-  i = 0;
-  while ((token = strsep(&data, "\n")) != NULL) {
-    i++;
-    while (*token != '\0') {
-      if (' ' == *token) {
-        token++;
-      } else {
-        break;
-      }
-    }
-    if (0 == i || 1 == i || 2 == i || counter < i) {
-      continue;
-    }
-    /* TODO make more general case, remove continue */
-    if (3 == i) {
-      /* skip the config or state part */
-      /* TODO check NULl */
-      token = (NULL == xpath) ? token + 8 : token + 7;
-    }
-    if (0 == strlen(token)) {
-      continue;
-    } else if ('}' == *token) {
-      /* when list/container are closed set new parent */
-      parent = (struct lyd_node *) (parent ? parent->parent : NULL);
-      continue;
-    } else {
-      last = &token[strlen(token) - 1];
-      tmp = strchr(token, ' ');
-      *tmp = '\0';
-      tmp++;
-      if ('{' == *last) {
-        /* only list/container's have the last element '{' */
-        /* TODO check NULL */
-        ly_err = lyd_new_inner(parent, ctx->module, token, false, &parent);
-        if (LY_SUCCESS != ly_err) {
-          rc = SR_ERR_INTERNAL;
-          goto error;
-        }
-        if (NULL == top_parent) {
-          top_parent = parent;
-        }
-        continue;
-      } else if ('}' == *last) {
-        /* when list/container are closed set new parent */
-        parent = (struct lyd_node *) (parent ? parent->parent : NULL);
-        continue;
-      } else {
-        *last = '\0';
-        /* add leafs */
-        /* TODO check NULl */
-        ly_err = lyd_new_term(parent, ctx->module, token, tmp, false, &check);
-        if (LY_SUCCESS != ly_err) {
-          rc = SR_ERR_INTERNAL;
-          goto error;
-        }
-      }
-    }
-  }
-
-  /* validate the libyang data nodes */
-  if (LY_SUCCESS != lyd_validate_all(&top_parent, NULL, LYD_VALIDATE_PRESENT, NULL)) {
-    rc = SR_ERR_INTERNAL;
-    goto error;
-  }
-
-error:
-  *node = top_parent;
-
-  return rc;
-}
-#endif
-
 bool is_list_instance(char *node_name) {
   /* Check if a node is a list from the snabb-softwire-v3 YANG module. */
   if (0 == strcmp(node_name, "softwire") ||
@@ -266,8 +126,8 @@ int transform_snabb_data_to_tree(global_ctx_t *ctx, char *xpath, char *data,
   }
 
   /* replace escaped new lines */
-  len = strlen(data);
-  for (i = 0; i < (int) len; i++) {
+  len = (int) strlen(data);
+  for (i = 0; i < len; i++) {
     if ('\\' == data[i] && 'n' == data[i + 1]) {
       data[i] = '\n';
       i++;
@@ -375,8 +235,6 @@ int transform_snabb_data_to_tree(global_ctx_t *ctx, char *xpath, char *data,
   }
 
 validate:
-  //ly_err = lyd_print_fd(1, top_parent, LYD_JSON, 0);
-
   /* validate only if config data is present (lyd_validate_all requires config data) */
   if (!state_data) {
     validation_flags = LYD_VALIDATE_PRESENT | LYD_VALIDATE_NO_STATE;
