@@ -111,10 +111,10 @@ RUN \
 
 # sysrepo-snabb-plugin
 RUN \
-      git clone https://github.com/sartura/sysrepo-snabb-plugin.git && \
+      git clone https://github.com/sysrepo/sysrepo-snabb-plugin.git && \
       cd sysrepo-snabb-plugin && mkdir build && cd build && \
-      git checkout sysrepo-1.x.x-devel && \
-      cmake -DCMAKE_BUILD_TYPE:String="debug" -DPLUGIN:BOOL=ON -DYANG_MODEL:String="snabb-softwire-v2" -DSR_PLUGINS_DIR="/usr/local/lib/sysrepo/plugins" .. && \
+      git checkout devel && \
+      cmake -DCMAKE_BUILD_TYPE:String="debug" -DPLUGIN:BOOL=ON -DYANG_MODEL:String="snabb-softwire-v3" -DSR_PLUGINS_DIR="/usr/local/lib/sysrepo/plugins" .. && \
       make -j2 && \
       make install && \
       ldconfig
@@ -130,7 +130,8 @@ RUN \
 
 # install snabb YANG models
 RUN \
-      sysrepoctl -i /opt/dev/snabb/src/lib/yang/snabb-softwire-v2.yang
+      sysrepoctl -i /opt/dev/snabb/src/lib/yang/snabb-softwire-v2.yang && \
+      sysrepoctl -i /opt/dev/snabb/src/lib/yang/snabb-softwire-v3.yang
 
 # setup systemd
 ENV \
