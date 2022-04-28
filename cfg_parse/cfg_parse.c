@@ -27,16 +27,19 @@ struct cfg_struct
 
 /* Helper functions
     A malloc() wrapper which handles null return values, and zeroes memory too */
-static void *cfg_malloc(const unsigned int size)
+static void *cfg_malloc(const size_t size)
 {
   void *temp = malloc(size);
-  if (temp == NULL && size != 0)
+  // either of these conditions can cause issues - Jens Gustedt's blog on dynamic memory allocation
+  if (temp == NULL || size == 0)
   {
-    fprintf(stderr,"CFG_PARSE ERROR: MALLOC(%u) returned NULL (errno==",size);
-    if (errno == ENOMEM)
+    fprintf(stderr,"CFG_PARSE ERROR: malloc(%lu) returned NULL or malloc size is 0 (errno==", size);
+    if (errno == ENOMEM) {
       fprintf(stderr, "ENOMEM");
-    else
-      fprintf(stderr, "%d, ENOMEM==%d",errno,ENOMEM);
+    }
+    else {
+      fprintf(stderr, "%d, ENOMEM==%d", errno, ENOMEM);
+    }
     fprintf(stderr,")\n");
     exit(EXIT_FAILURE);
   }
@@ -54,25 +57,29 @@ static char cfg_is_whitespace(const char c)
     Input str *MUST* be null-terminated, or disaster will result */
 static char *cfg_trim(const char *str)
 {
-  int temp_len;
+  size_t temp_len;
   char *tstr;
 
   /* check for null input first */
-  if (str == NULL) return NULL;
+  if (str == NULL) {
+    return NULL;
+  }
 
   /* advance start pointer to first non-whitespace char */
-  while (cfg_is_whitespace(*str))
+  while (cfg_is_whitespace(*str)) {
     str ++;
+  }
 
   /* calculate length of output string, minus leading whitespace */
   temp_len = strlen(str);
 
   /* roll back length until we run out of whitespace */
-  while (temp_len > 0 && cfg_is_whitespace(str[temp_len-1]))
+  while (temp_len > 0 && cfg_is_whitespace(str[temp_len-1])) {
     temp_len --;
+  }
 
   /* copy portion of string to new string */
-  tstr = (char *)cfg_malloc(temp_len + 1);
+  tstr = (char *) cfg_malloc(temp_len + 1);
   memcpy(tstr,str,temp_len);
 
   return tstr;
@@ -167,7 +174,7 @@ int cfg_save(const struct cfg_struct *cfg, const char *filename)
  */
 const char * cfg_get(const struct cfg_struct *cfg, const char *key)
 {
-  unsigned int i, len;
+  size_t i, len;
   char *tkey;
   struct cfg_node *temp;
 
@@ -183,7 +190,7 @@ const char * cfg_get(const struct cfg_struct *cfg, const char *key)
   /* Lowercase key */
   len = strlen(tkey);
   for (i = 0; i < len; i++)
-    tkey[i] = tolower(tkey[i]);
+    tkey[i] = (char) tolower(tkey[i]);
 
   /* set up pointer to start of list */
   temp = cfg->head;
@@ -214,7 +221,7 @@ const char * cfg_get(const struct cfg_struct *cfg, const char *key)
  */
 void cfg_set(struct cfg_struct *cfg, const char *key, const char *value)
 {
-  unsigned int i, len;
+  size_t i, len;
   char *tkey, *tvalue;
   struct cfg_node *temp;
 
@@ -229,7 +236,7 @@ void cfg_set(struct cfg_struct *cfg, const char *key, const char *value)
   /* Lowercase key */
   len = strlen(tkey);
   for (i = 0; i < len; i++)
-    tkey[i] = tolower(tkey[i]);
+    tkey[i] = (char) tolower(tkey[i]);
 
   /* Trim value. */
   tvalue = cfg_trim(value);
@@ -277,7 +284,7 @@ void cfg_set(struct cfg_struct *cfg, const char *key, const char *value)
  */
 void cfg_delete(struct cfg_struct *cfg, const char *key)
 {
-  unsigned int i, len;
+  size_t i, len;
   char *tkey;
   struct cfg_node *temp, *temp2 = NULL;
 
@@ -292,7 +299,7 @@ void cfg_delete(struct cfg_struct *cfg, const char *key)
   /* Lowercase key */
   len = strlen(tkey);
   for (i = 0; i < len; i++)
-    tkey[i] = tolower(tkey[i]);
+    tkey[i] = (char) tolower(tkey[i]);
 
   /* set pointer to start of list */
   temp = cfg->head;
@@ -336,7 +343,7 @@ void cfg_delete(struct cfg_struct *cfg, const char *key)
  * performing any further operations.
  * @return Pointer to newly initialized cfg_struct object.
  */
-struct cfg_struct * cfg_init()
+struct cfg_struct *cfg_init(void)
 {
   struct cfg_struct *temp;
   temp = (struct cfg_struct *)cfg_malloc(sizeof(struct cfg_struct));

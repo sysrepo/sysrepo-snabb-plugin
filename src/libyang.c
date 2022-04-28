@@ -22,7 +22,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
+#include <sysrepo.h>
 #include <sysrepo/xpath.h>
 
 #include <libyang/libyang.h>
@@ -34,207 +36,216 @@
 #include "snabb.h"
 #include "transform.h"
 
-int
-parse_yang_model(global_ctx_t *ctx) {
-	const struct lys_module *module = NULL;
-	struct ly_ctx *libyang_ctx = NULL;
-	char *schema_content = NULL;
-	sr_schema_t *schemas = NULL;
-	size_t schema_cnt = 0;
-	int rc = SR_ERR_OK;
-	int lrc = 0;
+int parse_yang_model(global_ctx_t *ctx) {
+  sr_conn_ctx_t *connection = NULL;
+  struct lys_module *module = NULL;
+  const struct ly_ctx *libyang_ctx = NULL;
+  int rc = SR_ERR_OK;
 
-	/* TODO get sysrepo yang schema path
-	 * will be neede for alarms
-	 * */
-	libyang_ctx = ly_ctx_new(NULL, LY_CTX_ALLIMPLEMENTED);
-	if (NULL == libyang_ctx) {
-		rc = SR_ERR_INTERNAL;
-		goto error;
-	}
+  /* TODO get sysrepo yang schema path
+   * will be neede for alarms
+   * */
+  connection = sr_session_get_connection(ctx->sess);
+  CHECK_NULL_MSG(connection, &rc, cleanup, "sr_session_get_connection error");
 
-    /* ietf-softwire-br YANG models depends on ietf-softwire-common */
-	if (0 == strcmp("ietf-softwire-br", ctx->yang_model)) {
-		rc = sr_get_schema(ctx->sess, "ietf-softwire-common", NULL, NULL, SR_SCHEMA_YIN, &schema_content);
-		CHECK_RET(rc, error, "failed sr_get_schema: %s", sr_strerror(rc));
+  libyang_ctx = sr_acquire_context(connection);
+  CHECK_NULL_MSG(libyang_ctx, &rc, cleanup, "sr_get_context error");
 
-		module = lys_parse_mem(libyang_ctx, schema_content, LYS_IN_YIN);
-		if (NULL == module) {
-			rc = SR_ERR_INTERNAL;
-			goto error;
-		}
-	}
+  /* ietf-softwire-br YANG models depends on ietf-softwire-common */
+  if (0 == strcmp("ietf-softwire-br", ctx->yang_model)) {
+    module = (struct lys_module *)ly_ctx_get_module(
+        libyang_ctx, "ietf-softwire-common", NULL);
+    CHECK_NULL_MSG(module, &rc, cleanup, "ly_ctx_get_module error");
+  }
 
-	rc = sr_get_schema(ctx->sess, ctx->yang_model, NULL, NULL, SR_SCHEMA_YIN, &schema_content);
-	CHECK_RET(rc, error, "failed sr_get_schema: %s", sr_strerror(rc));
+  module = (struct lys_module *)ly_ctx_get_module(libyang_ctx, ctx->yang_model,
+                                                  "2021-11-08");
+  CHECK_NULL_MSG(module, &rc, cleanup, "ly_ctx_get_module error");
 
-	module = lys_parse_mem(libyang_ctx, schema_content, LYS_IN_YIN);
-	if (NULL == module) {
-		rc = SR_ERR_INTERNAL;
-		goto error;
-	}
+  ctx->module = module;
 
-	/* fetch enbaled features from Sysrepo and enable them in libyang */
-	rc = sr_list_schemas(ctx->sess, &schemas, &schema_cnt);
-	CHECK_RET(rc, error, "failed sr_list_schemas: %s", sr_strerror(rc));
-	for (size_t s = 0; s < schema_cnt; s++) {
-		if (0 == strcmp(ctx->yang_model, schemas[s].module_name)){
-			for (size_t i = 0; i < schemas[s].enabled_feature_cnt; i++) {
-				INF("Enable feature %s in yang model %s", schemas[s].enabled_features[i], ctx->yang_model);
-				lrc = lys_features_enable(module, schemas[s].enabled_features[i]);
-				if (0 != lrc) {
-					ERR("The feature %s is not defined in the yang model %s", schemas[s].enabled_features[i], ctx->yang_model);
-				}
-			}
-		}
-	}
+  ctx->libyang_ctx = (struct ly_ctx *)libyang_ctx;
 
-	ctx->module = module;
-
-	ctx->libyang_ctx = libyang_ctx;
-
-error:
-	if (NULL != schemas && schema_cnt > 0) {
-		sr_free_schemas(schemas, schema_cnt);
-	}
-	if (NULL != schema_content) {
-		free(schema_content);
-	}
-	return rc;
+cleanup:
+  return rc;
+}
+/*
+void clear_libyang_ctx(global_ctx_t *ctx) {
+  ly_ctx_destroy(ctx->libyang_ctx, NULL);
+  INF_MSG("clear libyang context");
+}
+*/
+bool list_or_container(sr_val_type_t type) {
+  return type == SR_LIST_T || type == SR_CONTAINER_T ||
+         type == SR_CONTAINER_PRESENCE_T;
 }
 
-void
-clear_libyang_ctx(global_ctx_t *ctx) {
-    ly_ctx_destroy(ctx->libyang_ctx, NULL);
-    INF_MSG("clear libyang context");
+bool is_list_instance(char *node_name) {
+  /* Check if a node is a list from the snabb-softwire-v3 YANG module. */
+  if (0 == strcmp(node_name, "softwire") ||
+      0 == strcmp(node_name, "instance") ||
+      0 == strcmp(node_name, "queue")) {
+    return true;
+  }
+  return false;
 }
 
-bool
-list_or_container(sr_type_t type) {
-    return type == SR_LIST_T || type == SR_CONTAINER_T || type == SR_CONTAINER_PRESENCE_T;
-}
-
-/* TODO refactor this */
-int
-transform_data_to_array(global_ctx_t *ctx, char *xpath, char *data, struct lyd_node **node) {
-    int rc = SR_ERR_OK;
-    char *token, *tmp, *last;
-    int i = 0, counter = 0;
-    struct lyd_node *parent = NULL, *top_parent = NULL, *check = NULL;
-
-    /* replace escaped new lines */
-    for (i = 0; i < (int) strlen(data); i++) {
-        if ('\\' == data[i] && 'n' == data[i+1]) {
-            data[i] = '\n';
-            i++;
-            data[i] = ' ';
-            counter++;
-        }
+bool found_all_list_keys(char *list_name, char *list_keys) {
+  /* list_keys should look like this: "[key1='value1'][key2='value2']..." */
+  if (0 == strcmp(list_name, "softwire")) {
+    if (strstr(list_keys, "ipv4") && strstr(list_keys, "psid")) {
+      return true;
     }
-    counter = counter + 2;
+  } else if (0 == strcmp(list_name, "instance")) {
+    if (strstr(list_keys, "device")) {
+      return true;
+    }
+  } else if(0 == strcmp(list_name, "queue")) {
+    if (strstr(list_keys, "id")) {
+      return true;
+    }
+  }
+  return false;
+}
 
-    /* transform xpath to lyd_node's*/
-    if (NULL != xpath) {
-        sr_xpath_ctx_t state = {0};
-        char *xpath_elem = NULL;
-        while (true) {
-            if (NULL == xpath_elem) {
-                xpath_elem = sr_xpath_next_node(xpath, &state);
-            } else {
-                xpath_elem = sr_xpath_next_node(NULL, &state);
-            }
-            if (NULL == xpath_elem) {
-                break;
-            }
+/*
+ * Transform configuration or state data received over a snabb socket
+ * to a libyang data tree with *top_parent as the root node.
+ */
+int transform_snabb_data_to_tree(global_ctx_t *ctx, char *xpath, char *data,
+                                 struct lyd_node **top_parent, bool state_data) {
+  int rc = SR_ERR_OK;
+  int i = 0, len = 0;
+  struct lyd_node *parent = NULL;
+  LY_ERR ly_err = LY_SUCCESS;
+  uint32_t validation_flags = 0;
 
-            parent = lyd_new(parent, ctx->module, xpath_elem);
-            if (NULL == top_parent) {
-                top_parent = parent;
-            }
+  if (NULL == data) {
+    ERR_MSG("transform_data_to_array2: data == NULL");
+    return -1;
+  }
 
-            /* add key values */
-            while(true) {
-                char *key, *value, *key_copy;
-                /* iterate over key value pairs in xpath */
-                key = sr_xpath_next_key_name(NULL, &state);
-                if (NULL == key) {
-                    break;
-                }
-                key_copy = strdup(key);
-                value = sr_xpath_next_key_value(NULL, &state);
-                lyd_new_leaf(parent, ctx->module, key_copy, value);
-                free(key_copy);
-            }
-        }
+  /* replace escaped new lines */
+  len = (int) strlen(data);
+  for (i = 0; i < len; i++) {
+    if ('\\' == data[i] && 'n' == data[i + 1]) {
+      data[i] = '\n';
+      i++;
+      data[i] = ' ';
+    }
+  }
+
+  data = strstr(data, "\"") + 1; /* actual config data starts after " */
+
+  if (NULL == data) {
+    ERR_MSG("config/state data not present in given data string");
+    return -1;
+  }
+
+  if (NULL != *top_parent) {
+    parent = *top_parent;
+  }
+
+  bool searching_for_list_keys = false;
+  char *list_name = NULL;
+  /* for storing key predicate for list instance definition,
+   * eg. [key1='value1'][key2='value2'] */
+  char list_keys[256] = {0};
+
+  /* transform config/state data lines to tree nodes */
+  char *line = NULL;
+  while ((line = strsep(&data, "\n")) != NULL) {
+    if (strstr(line, "\"")) {
+      /* reached end of config data */
+      goto validate;
     }
 
-    i = 0;
-    while ((token = strsep(&data, "\n")) != NULL) {
-        i++;
-        while (*token != '\0') {
-            if (' ' == *token) {
-                token++;
-            } else {
-                break;
-            }
-        }
-        if (0 == i || 1 == i || 2 == i || counter < i) {
-            continue;
-        }
-        /* TODO make more general case, remove continue */
-        if (3 == i) {
-            /* skip the config or state part */
-            /* TODO check NULl */
-            token = (NULL == xpath) ? token + 8 : token + 7;
-        }
-        if (0 == strlen(token)) {
-            continue;
-        } else if ('}' == *token) {
-            /* when list/container are closed set new parent */
-            parent = parent ? parent->parent : NULL;
-            continue;
+    /* skip whitespace on the start of the line */
+    while (' ' == *line) {
+      line++;
+    }
+    if (0 == strlen(line)) {
+      continue;
+    }
+    char line_end = line[strlen(line) - 1];
+    char *line_remaining = line;
+    char *node_name = strsep(&line_remaining, " ");
+
+    switch (line_end) {
+      case '{': { /* current config line defines a container or list-instance */
+        if (is_list_instance(node_name)) {
+          /* To create a list instance we need to iterate over upcoming
+           * lines until we find the value of all list keys for this instance.
+           * Assumption: list nodes are always ordered so that list keys are on top. */
+          list_name = node_name;
+          searching_for_list_keys = true;
         } else {
-            last = &token[strlen(token) - 1];
-            tmp = strchr(token, ' ');
-            *tmp = '\0';
-            tmp++;
-            if ('{' == *last) {
-                /* only list/container's have the last element '{' */
-                /* TODO check NULl */
-                parent = lyd_new(parent, ctx->module, token);
-                if (NULL == parent) {
-                    rc = SR_ERR_INTERNAL;
-                    goto error;
-                }
-                if (NULL == top_parent) {
-                    top_parent = parent;
-                }
-                continue;
-            } else if ('}' == *last) {
-                /* when list/container are closed set new parent */
-                parent = parent ? parent->parent : NULL;
-                continue;
-            } else {
-                *last = '\0';
-                /* add leafs */
-                /* TODO check NULl */
-                check = lyd_new_leaf(parent, ctx->module, token, tmp);
-                if (NULL == check) {
-                    rc = SR_ERR_INTERNAL;
-                    goto error;
-                }
-            }
+          /* add container node */
+          ly_err = lyd_new_inner(parent, ctx->module, node_name, false, &parent);
+          if (LY_SUCCESS != ly_err) {
+            ERR("lyd_new_inner error (%d)", ly_err);
+            rc = SR_ERR_INTERNAL;
+            goto error;
+          }
+          if (NULL == *top_parent) {
+            *top_parent = parent;
+          }
         }
-    }
+        break;
+      }
+      case '}': /* current line is the end of a container/list definition */
+        parent = (struct lyd_node *) (parent ? parent->parent : NULL);
+        break;
+      case ';': { /* current line defines a leaf node */
+        char *leaf_value = strsep(&line_remaining, " ");
+        leaf_value[strlen(leaf_value) - 1] = '\0'; /* set ';' to '\0' */
 
-    /* validate the libyang data nodes */
-    if (0 != lyd_validate(&top_parent, LYD_OPT_GET, NULL)) {
-        rc = SR_ERR_INTERNAL;
-        goto error;
+        if (searching_for_list_keys) {
+          /* append list key */
+          char key_predicate[64] = {0};
+          snprintf(key_predicate, 64, "[%s='%s']", node_name, leaf_value);
+          strncat(list_keys, key_predicate, sizeof(list_keys) - strlen(list_keys) - 1);
+          if (found_all_list_keys(list_name, list_keys)) {
+            /* create the list instance */
+            ly_err = lyd_new_list2(parent, ctx->module, list_name, list_keys, false, &parent);
+            if (LY_SUCCESS != ly_err) {
+              ERR("lyd_new_list2 error (%d)", ly_err);
+              rc = SR_ERR_INTERNAL;
+              goto error;
+            }
+            searching_for_list_keys = false;
+            list_name = NULL;
+            memset(list_keys, 0, sizeof(list_keys));
+          }
+        } else {
+          /* create leaf node */
+          ly_err = lyd_new_term(parent, ctx->module, node_name, leaf_value, false, NULL);
+          if (LY_SUCCESS != ly_err) {
+            ERR("lyd_new_term error (%d)", ly_err);
+            rc = SR_ERR_INTERNAL;
+            goto error;
+          }
+        }
+        break;
+      }
+      default:
+        /* ignore line */
+        break;
     }
+  }
+
+validate:
+  /* validate only if config data is present (lyd_validate_all requires config data) */
+  if (!state_data) {
+    validation_flags = LYD_VALIDATE_PRESENT | LYD_VALIDATE_NO_STATE;
+    ly_err = lyd_validate_all(top_parent, NULL, validation_flags, NULL);
+    if (LY_SUCCESS != ly_err) {
+      ERR("lyd_validate_all error (%d)", ly_err);
+      rc = SR_ERR_INTERNAL;
+      goto error;
+    }
+  }
 
 error:
-    *node = top_parent;
-
-    return rc;
+  return rc;
 }

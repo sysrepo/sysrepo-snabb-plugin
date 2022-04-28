@@ -1,6 +1,8 @@
 FROM ubuntu:18.04
 
-MAINTAINER mislav.novakovic@sartura.hr
+MAINTAINER filip.maric@sartura.hr
+
+ENV DEBIAN_FRONTEND=noninteractive
 
 RUN \
       apt-get update && apt-get install -y \
@@ -9,16 +11,27 @@ RUN \
       build-essential \
       vim \
       supervisor \
-      libpcre3-dev \
+      libpcre2-dev \
       pkg-config \
       libavl-dev \
       libev-dev \
       libprotobuf-c-dev \
       protobuf-c-compiler \
-      libssh-dev \
+      libsystemd-dev \
+      zlib1g-dev \
+#      libssh-dev \
       libssl-dev \
       swig \
-      python-dev
+	valgrind \
+	systemd \
+      python-dev \
+      golang
+
+# install libssh
+RUN \
+      git clone https://git.libssh.org/projects/libssh.git && \
+      cd libssh && mkdir build && cd build && \
+      cmake .. && make && make install
 
 # add netconf user
 RUN \
@@ -55,11 +68,7 @@ RUN \
       git clone https://github.com/sysrepo/sysrepo.git && \
       cd sysrepo && mkdir build && cd build && \
       git checkout devel && \
-      cmake -DCMAKE_BUILD_TYPE:String="Release" -DENABLE_TESTS=OFF -DREPOSITORY_LOC:PATH=/etc/sysrepo \
-      -DGEN_LANGUAGE_BINDINGS=OFF -DENABLE_NACM=OFF -DBUILD_EXAMPLES=OFF \
-      -DREQUEST_TIMEOUT=300 -DCOMMIT_VERIFY_TIMEOUT=300 \
-      -DGET_SUBTREE_CHUNK_CHILD_LIMIT=200000 \
-      .. && \
+      cmake -DCMAKE_BUILD_TYPE="debug" -DREPO_PATH=/etc/sysrepo .. && \
       make -j2 && \
       make install && \
       ldconfig
@@ -77,39 +86,38 @@ RUN \
       ldconfig
 
 # keystore
-RUN \
-      cd /opt/dev && \
-      git clone https://github.com/CESNET/Netopeer2.git && \
-      cd Netopeer2 && \
-      cd keystored && mkdir build && cd build && \
-      git checkout devel-server && \
-      cmake -DCMAKE_BUILD_TYPE:String="Release" .. && \
-      make -j2 && \
-      make install && \
-      ldconfig
+#RUN \
+#      cd /opt/dev && \
+#      git clone https://github.com/CESNET/Netopeer2.git && \
+#      cd Netopeer2 && \
+#      cd keystored && mkdir build && cd build && \
+#      git checkout devel-server && \
+#      cmake -DCMAKE_BUILD_TYPE:String="Release" .. && \
+#      make -j2 && \
+#      make install && \
+#      ldconfig
 
 # netopeer2
-RUN \
-      cd /opt/dev && \
-      cd Netopeer2/server && mkdir build && cd build && \
-      cmake -DCMAKE_BUILD_TYPE:String="Release" .. && \
-      make -j2 && \
-      make install && \
-      cd ../../cli && mkdir build && cd build && \
-      cmake -DCMAKE_BUILD_TYPE:String="Release" .. && \
-      make -j2 && \
-      make install
+#RUN \
+#      cd /opt/dev && \
+#      cd Netopeer2/server && mkdir build && cd build && \
+#      cmake -DCMAKE_BUILD_TYPE:String="Release" .. && \
+#      make -j2 && \
+#      make install && \
+#      cd ../../cli && mkdir build && cd build && \
+#      cmake -DCMAKE_BUILD_TYPE:String="Release" .. && \
+#      make -j2 && \
+#      make install
 
 # sysrepo-snabb-plugin
 RUN \
-      git clone https://github.com/sysrepo/sysrepo-snabb-plugin.git && \
+      git clone https://github.com/sartura/sysrepo-snabb-plugin.git && \
       cd sysrepo-snabb-plugin && mkdir build && cd build && \
-      git checkout devel && \
-      cmake -DCMAKE_BUILD_TYPE:String="Release" -DPLUGIN:BOOL=ON -DYANG_MODEL:String="snabb-softwire-v2" .. && \
+      git checkout sysrepo-1.x.x-devel && \
+      cmake -DCMAKE_BUILD_TYPE:String="debug" -DPLUGIN:BOOL=ON -DYANG_MODEL:String="snabb-softwire-v2" -DSR_PLUGINS_DIR="/usr/local/lib/sysrepo/plugins" .. && \
       make -j2 && \
       make install && \
       ldconfig
-
 
 # snabb
 RUN \
@@ -120,16 +128,9 @@ RUN \
       make install && \
       ldconfig
 
-RUN \
-      apt-get update && apt-get install -y \
-      # general tools
-      systemd \
-      valgrind \
-      gdb
-
 # install snabb YANG models
 RUN \
-      sysrepoctl --install --yang=/opt/dev/snabb/src/lib/yang/snabb-softwire-v2.yang
+      sysrepoctl -i /opt/dev/snabb/src/lib/yang/snabb-softwire-v2.yang
 
 # setup systemd
 ENV \
@@ -162,9 +163,9 @@ COPY \
       ./systemd/* /lib/systemd/system/
 
 RUN \
-      systemctl enable sysrepod.service && \
+#      systemctl enable sysrepod.service && \
       systemctl enable sysrepo-plugind.service && \
-      systemctl enable netopeer2-server.service && \
+#      systemctl enable netopeer2-server.service && \
       systemctl enable lwaftr.service
 
 ENV EDITOR vim
