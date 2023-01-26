@@ -56,11 +56,22 @@ int parse_yang_model(global_ctx_t *ctx) {
     module = (struct lys_module *)ly_ctx_get_module(
         libyang_ctx, "ietf-softwire-common", NULL);
     CHECK_NULL_MSG(module, &rc, cleanup, "ly_ctx_get_module error");
+  /* snabb-softwire-v2 */
+  } else if (0 == strcmp("snabb-softwire-v2", ctx->yang_model)) {
+    module = (struct lys_module *)ly_ctx_get_module(
+        libyang_ctx, ctx->yang_model, "2021-07-13");
+    CHECK_NULL_MSG(module, &rc, cleanup, "ly_ctx_get_module error");
+  /* snabb-softwire-v3 */
+  } else if (0 == strcmp("snabb-softwire-v3", ctx->yang_model)) {
+    module = (struct lys_module *)ly_ctx_get_module(
+        libyang_ctx, ctx->yang_model, "2021-11-08");
+    CHECK_NULL_MSG(module, &rc, cleanup, "ly_ctx_get_module error");
+  } else {
+    rc = SR_ERR_NOT_FOUND;
+    ERR("unsupported model: %s", ctx->yang_model);
+    goto cleanup;
   }
 
-  module = (struct lys_module *)ly_ctx_get_module(libyang_ctx, ctx->yang_model,
-                                                  "2021-11-08");
-  CHECK_NULL_MSG(module, &rc, cleanup, "ly_ctx_get_module error");
 
   ctx->module = module;
 
