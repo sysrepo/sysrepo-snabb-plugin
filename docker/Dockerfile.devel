@@ -1,37 +1,25 @@
 FROM ubuntu:18.04
 
-MAINTAINER filip.maric@sartura.hr
-
-ENV DEBIAN_FRONTEND=noninteractive
+MAINTAINER mislav.novakovic@sartura.hr
 
 RUN \
       apt-get update && apt-get install -y \
-      git \
+      git \ 
       cmake \
       build-essential \
       vim \
       supervisor \
+      zlib1g-dev \
+      libpcre3-dev \
       libpcre2-dev \
       pkg-config \
       libavl-dev \
       libev-dev \
       libprotobuf-c-dev \
       protobuf-c-compiler \
-      libsystemd-dev \
-      zlib1g-dev \
-#      libssh-dev \
       libssl-dev \
       swig \
-	valgrind \
-	systemd \
-      python-dev \
-      golang
-
-# install libssh
-RUN \
-      git clone https://git.libssh.org/projects/libssh.git && \
-      cd libssh && mkdir build && cd build && \
-      cmake .. && make && make install
+      python-dev
 
 # add netconf user
 RUN \
@@ -59,7 +47,17 @@ RUN \
       cd libyang && mkdir build && cd build && \
       git checkout devel && \
       cmake -DCMAKE_BUILD_TYPE:String="Release" -DENABLE_BUILD_TESTS=OFF .. && \
-      make -j2 && \
+      make -j$(nproc) && \
+      make install && \
+      ldconfig
+
+#libssh
+RUN \
+      cd /opt/dev && \
+      git clone https://git.libssh.org/projects/libssh.git && cd libssh && \
+      mkdir build && cd build && \
+      cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE="Debug" -DWITH_ZLIB=ON -DWITH_NACL=OFF -DWITH_PCAP=OFF .. && \
+      make -j$(nproc) && \
       make install && \
       ldconfig
 
@@ -68,8 +66,12 @@ RUN \
       git clone https://github.com/sysrepo/sysrepo.git && \
       cd sysrepo && mkdir build && cd build && \
       git checkout devel && \
-      cmake -DCMAKE_BUILD_TYPE="debug" -DREPO_PATH=/etc/sysrepo .. && \
-      make -j2 && \
+      cmake -DCMAKE_BUILD_TYPE:String="Release" -DENABLE_TESTS=OFF -DREPOSITORY_LOC:PATH=/etc/sysrepo \
+      -DGEN_LANGUAGE_BINDINGS=OFF -DENABLE_NACM=OFF -DBUILD_EXAMPLES=OFF \
+      -DREQUEST_TIMEOUT=300 -DCOMMIT_VERIFY_TIMEOUT=300 \
+      -DGET_SUBTREE_CHUNK_CHILD_LIMIT=200000 \
+      .. && \
+      make -j$(nproc) && \
       make install && \
       ldconfig
 
@@ -81,57 +83,52 @@ RUN \
       cmake -DCMAKE_BUILD_TYPE:String="Release" -DENABLE_BUILD_TESTS=OFF \
       -DREAD_INACTIVE_TIMEOUT=300 -DREAD_ACTIVE_TIMEOUT=300 \
       .. && \
-      make -j2 && \
+      make -j$(nproc) && \
       make install && \
       ldconfig
 
-# keystore
-#RUN \
-#      cd /opt/dev && \
-#      git clone https://github.com/CESNET/Netopeer2.git && \
-#      cd Netopeer2 && \
-#      cd keystored && mkdir build && cd build && \
-#      git checkout devel-server && \
-#      cmake -DCMAKE_BUILD_TYPE:String="Release" .. && \
-#      make -j2 && \
-#      make install && \
-#      ldconfig
-
 # netopeer2
-#RUN \
-#      cd /opt/dev && \
-#      cd Netopeer2/server && mkdir build && cd build && \
-#      cmake -DCMAKE_BUILD_TYPE:String="Release" .. && \
-#      make -j2 && \
-#      make install && \
-#      cd ../../cli && mkdir build && cd build && \
-#      cmake -DCMAKE_BUILD_TYPE:String="Release" .. && \
-#      make -j2 && \
-#      make install
+RUN \
+      cd /opt/dev && \
+      git clone https://github.com/CESNET/Netopeer2.git && \
+      cd Netopeer2 && \
+      mkdir build && cd build && \
+      git checkout devel && \
+      cmake -DCMAKE_BUILD_TYPE:String="Release" .. && \
+      make -j$(nproc) && \
+      make install && \
+      ldconfig
 
 # sysrepo-snabb-plugin
 RUN \
       git clone https://github.com/sysrepo/sysrepo-snabb-plugin.git && \
       cd sysrepo-snabb-plugin && mkdir build && cd build && \
-      git checkout devel && \
-      cmake -DCMAKE_BUILD_TYPE:String="debug" -DPLUGIN:BOOL=ON -DYANG_MODEL:String="snabb-softwire-v3" -DSR_PLUGINS_DIR="/usr/local/lib/sysrepo/plugins" .. && \
-      make -j2 && \
+      git checkout support-snabb-softwire-v2-and-v3 && \
+      cmake -DCMAKE_BUILD_TYPE:String="Release" -DPLUGIN:BOOL=ON -DSR_PLUGINS_DIR=/usr/local/lib/ -DYANG_MODEL:String="snabb-softwire-v2" .. && \
+      make -j$(nproc) && \
       make install && \
       ldconfig
+
 
 # snabb
 RUN \
       git clone https://github.com/Igalia/snabb.git && \
       cd snabb && \
       git checkout lwaftr && \
-      make -j2 && \
+      make -j$(nproc) && \
       make install && \
       ldconfig
 
+RUN \
+      apt-get update && apt-get install -y \
+      # general tools
+      systemd \
+      valgrind \
+      gdb
+
 # install snabb YANG models
 RUN \
-      sysrepoctl -i /opt/dev/snabb/src/lib/yang/snabb-softwire-v2.yang && \
-      sysrepoctl -i /opt/dev/snabb/src/lib/yang/snabb-softwire-v3.yang
+      sysrepoctl --install /opt/dev/snabb/src/lib/yang/snabb-softwire-v2.yang
 
 # setup systemd
 ENV \
@@ -164,9 +161,9 @@ COPY \
       ./systemd/* /lib/systemd/system/
 
 RUN \
-#      systemctl enable sysrepod.service && \
+      systemctl enable sysrepod.service && \
       systemctl enable sysrepo-plugind.service && \
-#      systemctl enable netopeer2-server.service && \
+      systemctl enable netopeer2-server.service && \
       systemctl enable lwaftr.service
 
 ENV EDITOR vim
