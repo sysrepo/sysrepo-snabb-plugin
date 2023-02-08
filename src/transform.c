@@ -517,6 +517,10 @@ int sysrepo_datastore_to_snabb(global_ctx_t *ctx) {
   char *message = NULL;
   const char *config_xpath = "/snabb-softwire-v3:softwire-config";
 
+  if(0 == strcmp("snabb-softwire-v2", YANG))
+    config_xpath = "/snabb-softwire-v2:softwire-config";
+
+
   rc = sr_get_subtree(ctx->startup_sess, config_xpath, 0, &startup_data);
   CHECK_RET(rc, cleanup, "failed to get startup data tree: %s",
             sr_strerror(rc));
@@ -671,9 +675,9 @@ int snabb_socket_reconnect(global_ctx_t *ctx) {
   snabb_ps = popen("snabb ps", "r");
   CHECK_NULL_MSG(snabb_ps, &rc, cleanup, "Error opening pipe");
 
-  ret = fgets(line, sizeof(line), snabb_ps);
+  ret = fgets(line, (int)sizeof(line), snabb_ps);
   CHECK_NULL_MSG(ret, &rc, cleanup, "First line of snabb ps is empty");
-  ret = fgets(line, sizeof(line), snabb_ps);
+  ret = fgets(line, (int)sizeof(line), snabb_ps);
   CHECK_NULL_MSG(ret, &rc, cleanup, "Second line of snabb ps is empty");
 
   if (sscanf(line, "  \\- %d   worker for %d", &ignore_pid, &pid) != 2) {
@@ -718,6 +722,9 @@ cleanup:
 bool is_new_snabb_command(iter_change_t *iter, iter_change_t *prev) {
   /* edge case, can't add/remove on XPATH /softwire-config/instance only edit */
   char *cmp_xpath = "/snabb-softwire-v3:softwire-config/instance";
+  if(0 == strcmp("snabb-softwire-v2", YANG))
+    cmp_xpath = "/snabb-softwire-v2:softwire-config/instance";
+
   sr_val_t *tmp_val =
       (SR_OP_DELETED == iter->oper) ? iter->old_val : iter->new_val;
   if (0 == strncmp(cmp_xpath, tmp_val->xpath, strlen(cmp_xpath))) {
