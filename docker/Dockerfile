@@ -127,9 +127,13 @@ RUN \
       gdb
 
 # install snabb YANG models
-RUN if [ "$yangmodel" = "ietf-softwire" ] \
+RUN if [ "$yangmodel" = "snabb-softwire-v2" ] \
     ; then \
-    sysrepoctl -i /opt/dev/snabb/src/lib/yang/snabb-softwire-v2.yang  && \
+    sysrepoctl -i /opt/dev/snabb/src/lib/yang/snabb-softwire-v2.yang \
+	; fi
+
+RUN if [ "$yangmodel" = "snabb-softwire-v3" ] \
+    ; then \
     sysrepoctl -i /opt/dev/snabb/src/lib/yang/snabb-softwire-v3.yang \
 	; fi
 
