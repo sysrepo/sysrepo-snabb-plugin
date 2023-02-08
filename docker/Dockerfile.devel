@@ -103,7 +103,7 @@ RUN \
 RUN \
       git clone https://github.com/sysrepo/sysrepo-snabb-plugin.git && \
       cd sysrepo-snabb-plugin && mkdir build && cd build && \
-      git checkout support-snabb-softwire-v2-and-v3 && \
+      git checkout devel && \
       cmake -DCMAKE_BUILD_TYPE:String="Release" -DPLUGIN:BOOL=ON -DSR_PLUGINS_DIR=/usr/local/lib/ -DYANG_MODEL:String="snabb-softwire-v2" .. && \
       make -j$(nproc) && \
       make install && \
