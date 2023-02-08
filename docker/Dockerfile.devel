@@ -27,6 +27,8 @@ RUN \
       echo "netconf:netconf" | chpasswd
 
 # set root password
+# ensure that an unexpected error prevents the build from succeeding
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN \
       echo "root:root" | chpasswd
 
