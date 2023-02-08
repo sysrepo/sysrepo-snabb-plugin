@@ -10,7 +10,6 @@ RUN \
       vim \
       supervisor \
       zlib1g-dev \
-      libpcre3-dev \
       libpcre2-dev \
       pkg-config \
       libavl-dev \
