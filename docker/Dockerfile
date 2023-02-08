@@ -1,6 +1,6 @@
 FROM ubuntu:18.04
 
-MAINTAINER luka.paulic@sartura.hr
+LABEL org.opencontainers.image.authors="juraj.vijtiuk@sartura.hr,andrej.gardijan@sartura.hr"
 
 RUN \
       apt-get update && apt-get install -y \
@@ -9,13 +9,13 @@ RUN \
       build-essential \
       vim \
       supervisor \
-      libpcre3-dev \
+      zlib1g-dev \
+      libpcre2-dev \
       pkg-config \
       libavl-dev \
       libev-dev \
       libprotobuf-c-dev \
       protobuf-c-compiler \
-      libssh-dev \
       libssl-dev \
       swig \
       python-dev
@@ -26,6 +26,8 @@ RUN \
       echo "netconf:netconf" | chpasswd
 
 # set root password
+# ensure that an unexpected error prevents the build from succeeding
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN \
       echo "root:root" | chpasswd
 
@@ -46,7 +48,17 @@ RUN \
       cd libyang && mkdir build && cd build && \
       git checkout master && \
       cmake -DCMAKE_BUILD_TYPE:String="Release" -DENABLE_BUILD_TESTS=OFF .. && \
-      make -j2 && \
+      make -j$(nproc) && \
+      make install && \
+      ldconfig
+
+#libssh
+RUN \
+      cd /opt/dev && \
+      git clone https://git.libssh.org/projects/libssh.git && cd libssh && \
+      mkdir build && cd build && \
+      cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_BUILD_TYPE="Debug" -DWITH_ZLIB=ON -DWITH_NACL=OFF -DWITH_PCAP=OFF .. && \
+      make -j$(nproc) && \
       make install && \
       ldconfig
 
@@ -60,7 +72,7 @@ RUN \
       -DREQUEST_TIMEOUT=300 -DCOMMIT_VERIFY_TIMEOUT=300 \
       -DGET_SUBTREE_CHUNK_CHILD_LIMIT=200000 \
       .. && \
-      make -j2 && \
+      make -j$(nproc) && \
       make install && \
       ldconfig
 
@@ -72,51 +84,38 @@ RUN \
       cmake -DCMAKE_BUILD_TYPE:String="Release" -DENABLE_BUILD_TESTS=OFF \
       -DREAD_INACTIVE_TIMEOUT=300 -DREAD_ACTIVE_TIMEOUT=300 \
       .. && \
-      make -j2 && \
-      make install && \
-      ldconfig
-
-# keystore
-RUN \
-      cd /opt/dev && \
-      git clone https://github.com/CESNET/Netopeer2.git && \
-      cd Netopeer2 && \
-      cd keystored && mkdir build && cd build && \
-      git checkout master && \
-      cmake -DCMAKE_BUILD_TYPE:String="Release" .. && \
-      make -j2 && \
+      make -j$(nproc) && \
       make install && \
       ldconfig
 
 # netopeer2
 RUN \
       cd /opt/dev && \
-      cd Netopeer2/server && mkdir build && cd build && \
+      git clone https://github.com/CESNET/Netopeer2.git && \
+      cd Netopeer2 && \
+      mkdir build && cd build && \
+      git checkout master && \
       cmake -DCMAKE_BUILD_TYPE:String="Release" .. && \
-      make -j2 && \
+      make -j$(nproc) && \
       make install && \
-      cd ../../cli && mkdir build && cd build && \
-      cmake -DCMAKE_BUILD_TYPE:String="Release" .. && \
-      make -j2 && \
-      make install
+      ldconfig
 
 # sysrepo-snabb-plugin
 RUN \
       git clone https://github.com/sysrepo/sysrepo-snabb-plugin.git && \
       cd sysrepo-snabb-plugin && mkdir build && cd build && \
       git checkout master && \
-      cmake -DCMAKE_BUILD_TYPE:String="Release" -DPLUGIN:BOOL=ON -DYANG_MODEL:String="snabb-softwire-v2" .. && \
-      make -j2 && \
+      cmake -DCMAKE_BUILD_TYPE:String="Release" -DPLUGIN:BOOL=ON -DSR_PLUGINS_DIR:PATH=/usr/local/bin/ -DYANG_MODEL:String="snabb-softwire-v2" .. && \
+      make -j$(nproc) && \
       make install && \
       ldconfig
-
 
 # snabb
 RUN \
       git clone https://github.com/Igalia/snabb.git && \
       cd snabb && \
       git checkout lwaftr && \
-      make -j2 && \
+      make -j$(nproc) && \
       make install && \
       ldconfig
 
@@ -128,8 +127,15 @@ RUN \
       gdb
 
 # install snabb YANG models
-RUN \
-      sysrepoctl --install --yang=/opt/dev/snabb/src/lib/yang/snabb-softwire-v2.yang
+RUN if [ "$yangmodel" = "snabb-softwire-v2" ] \
+    ; then \
+    sysrepoctl -i /opt/dev/snabb/src/lib/yang/snabb-softwire-v2.yang \
+	; fi
+
+RUN if [ "$yangmodel" = "snabb-softwire-v3" ] \
+    ; then \
+    sysrepoctl -i /opt/dev/snabb/src/lib/yang/snabb-softwire-v3.yang \
+	; fi
 
 # setup systemd
 ENV \
@@ -144,6 +150,11 @@ RUN \
       rm -f /lib/systemd/system/sockets.target.wants/*initctl* && \
       rm -f /lib/systemd/system/basic.target.wants/* && \
       rm -f /lib/systemd/system/anaconda.target.wants/*
+
+# clean up apt cache, remove /var/lib/apt/lists/
+RUN \
+      apt-get clean && \
+      rm -rf /var/lib/apt/lists/*
 
 VOLUME [ “/sys/fs/cgroup” ]
 CMD [“/sbin/init”]

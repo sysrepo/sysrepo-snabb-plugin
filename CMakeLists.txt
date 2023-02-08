@@ -78,6 +78,17 @@ include_directories(
     ${LIBYANG_INCLUDE_DIRS}
 )
 
+# get sysrepo plugins directory
+if (NOT SR_PLUGINS_DIR)
+    if (PKG_CONFIG_FOUND)
+        execute_process(COMMAND ${PKG_CONFIG_EXECUTABLE} "--variable=SR_PLUGINS_DIR" "libsysrepo" OUTPUT_VARIABLE SR_PLUGINS_DIR)
+        string(STRIP ${SR_PLUGINS_DIR} SR_PLUGINS_DIR)
+    endif()
+endif()
+if (NOT SR_PLUGINS_DIR)
+    message(FATAL_ERROR "Cannot get sysrepo plugins directory due to missing pkg-config, set SR_PLUGINS_DIR manually.")
+endif()
+
 if (PLUGIN)
 	install(TARGETS ${CMAKE_PROJECT_NAME} DESTINATION ${SR_PLUGINS_DIR})
 else()
