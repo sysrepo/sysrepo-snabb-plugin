@@ -489,10 +489,16 @@ int snabb_datastore_to_sysrepo(global_ctx_t *ctx) {
   CHECK_RET(rc, error, "failed parse snabb data in libyang: %s",
             sr_strerror(rc));
 
-  /* copy snabb data to startup datastore */
-  INF_MSG("appply snabb data to sysrepo startup datastore");
-  rc = libyang_data_to_sysrepo(ctx->startup_sess, node);
+  /* copy snabb data to running datastore */
+  INF_MSG("appply snabb data to sysrepo running datastore");
+  rc = libyang_data_to_sysrepo(ctx->sess, node);
   CHECK_RET(rc, error, "failed to apply libyang data to sysrepo: %s",
+            sr_strerror(rc));
+
+  /* copy running -> startup */
+  INF_MSG("copy sysrepo running to startup datastore");
+  rc = sr_copy_config(ctx->startup_sess, YANG, SR_DS_RUNNING, 0);
+  CHECK_RET(rc, error, "failed to copy running to startup datastore: %s",
             sr_strerror(rc));
 
   /* free lyd_node */
