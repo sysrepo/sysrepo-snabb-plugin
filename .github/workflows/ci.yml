@@ -63,14 +63,6 @@ jobs:
         run: |
           sudo sysrepoctl -i snabb/src/lib/yang/snabb-softwire-v3.yang
 
-  tests:
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: 'recursive'
-
       - name: run-tests
         shell: bash
         working-directory: ${{github.workspace}}
@@ -79,9 +71,8 @@ jobs:
           export LIBYANG_LIBRARIES=/usr/local/lib
           export SYSREPO_HEADERS=/usr/local/include
           export SYSREPO_LIBRARIES=/usr/local/lib
-          ls /usr/local/include/node/**/*
 
-          #cd tests/robot-tests
-          #sudo ./setup.sh
-          #source ./test-venv/bin/activate
-          #robot src/Main.robot
+          cd tests/robot-tests
+          sudo ./setup.sh
+          source ./test-venv/bin/activate
+          robot src/Main.robot
