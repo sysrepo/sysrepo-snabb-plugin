@@ -68,11 +68,15 @@ jobs:
     needs: build
     shell: bash
     steps:
-      -uses: actions/checkout
-      -name: testssetup
-      run: |
-        cd tests/robot-tests
-        sudo ./setup.sh
-        source ./test-venv/bin/activate
-        robot src/Main.robot
-        cd ../.. && deactivate
+      - uses: actions/checkout@v3
+        with:
+          submodules: 'recursive'
+
+      - name: run-tests
+        shell: bash
+        run: |
+          cd tests/robot-tests
+          sudo ./setup.sh
+          source ./test-venv/bin/activate
+          robot src/Main.robot
+          cd ../.. && deactivate
