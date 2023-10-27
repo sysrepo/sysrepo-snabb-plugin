@@ -62,7 +62,7 @@ jobs:
         shell: bash
         working-directory: ${{github.workspace}}
         run: |
-          sudo sysrepoctl -i snabb/src/lib/yang/snabb-softwire-v3.yang
+          sysrepoctl -i snabb/src/lib/yang/snabb-softwire-v3.yang
 
       - name: run-tests
         shell: bash
