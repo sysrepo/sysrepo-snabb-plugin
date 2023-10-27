@@ -74,9 +74,9 @@ jobs:
       - name: run-tests
         shell: bash
         run: |
-          export LIBYANG_HEADERS=$(pwd)/libyang/src:$(pwd)/libyang/build/src:($pwd)/libyang/bulid/compat
+          export LIBYANG_HEADERS=$(pwd)/libyang/src:$(pwd)/libyang/build/src:$(pwd)/libyang/bulid/compat
           export LIBYANG_LIBRARIES=$(pwd)/libyang/src
-          export SYSREPO_HEADERS=$(pwd)/sysrepo/src:($pwd)/libyang/bulid/compat
+          export SYSREPO_HEADERS=$(pwd)/sysrepo/src:$(pwd)/libyang/bulid/compat
           export SYSREPO_LIBRARIES=$(pwd)/libyang/build
           cd tests/robot-tests
           sudo ./setup.sh
