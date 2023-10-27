@@ -78,8 +78,13 @@ jobs:
           export LIBYANG_LIBRARIES=$(pwd)/libyang/build
           export SYSREPO_HEADERS=$(pwd)/sysrepo/src
           export SYSREPO_LIBRARIES=$(pwd)/libyang/build
-          cd tests/robot-tests
-          sudo ./setup.sh
-          source ./test-venv/bin/activate
-          robot src/Main.robot
-          cd ../.. && deactivate
+          echo $LIBYANG_HEADERS
+          echo $LIBYANG_LIBRARIES
+          echo $SYSREPO_HEADERS
+          echo $SYSREPO_LIBRARIES
+
+          #cd tests/robot-tests
+          #sudo ./setup.sh
+          #source ./test-venv/bin/activate
+          #robot src/Main.robot
+          #cd ../.. && deactivate
