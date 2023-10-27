@@ -22,7 +22,7 @@ fi
 
 # create venv with dependencies
 if [ ! -d test-venv ];then
-	python -m test-venv && pip install -r requirements.txt
+	python -m venv test-venv && source test-venv/bin/activate && pip install -r requirements.txt
 fi
 
 # Run the veth setup script
