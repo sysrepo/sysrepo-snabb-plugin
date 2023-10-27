@@ -48,8 +48,7 @@ jobs:
         shell: bash
         working-directory: ${{github.workspace}}
         run: |
-          sudo cmake -B build -DCMAKE_BUILD_TYPE:String="Release" \
-                  -DPLUGIN:BOOL=OFF -DSR_PLUGINS_DIR=/usr/local/lib/ \
+          cmake -B build -DPLUGIN:BOOL=OFF -DSR_PLUGINS_DIR=/usr/local/lib/ \
                   -DYANG_MODEL:String="snabb-softwire-v3"
           cd build
           make -j4 
