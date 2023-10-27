@@ -76,7 +76,7 @@ jobs:
         run: |
           cd tests/robot-tests
           sudo ./setup.sh
-          ls
+          find /usr/local/include/ -name "*sysrepo*.h"
           source ./test-venv/bin/activate
           robot src/Main.robot
           cd ../.. && deactivate
