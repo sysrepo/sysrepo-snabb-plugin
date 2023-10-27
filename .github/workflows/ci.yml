@@ -76,6 +76,7 @@ jobs:
         run: |
           cd tests/robot-tests
           sudo ./setup.sh
+          ls
           source ./test-venv/bin/activate
           robot src/Main.robot
           cd ../.. && deactivate
