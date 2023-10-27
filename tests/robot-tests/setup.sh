@@ -22,6 +22,10 @@ fi
 
 # create venv with dependencies
 if [ ! -d test-venv ];then
+	export LIBYANG_HEADERS=/usr/local/include
+	export LIBYANG_LIBRARIES=/usr/local/lib
+	export SYSREPO_HEADERS=/usr/local/include
+	export SYSREPO_LIBRARIES=/usr/local/lib 
 	python -m venv test-venv && source test-venv/bin/activate && pip install -r requirements.txt
 fi
 
