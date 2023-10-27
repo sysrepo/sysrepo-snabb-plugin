@@ -76,4 +76,5 @@ jobs:
           cd tests/robot-tests
           sudo ./setup.sh
           source ./test-venv/bin/activate
+          sysrepoctl -l
           robot src/Main.robot
