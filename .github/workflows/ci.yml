@@ -74,7 +74,9 @@ jobs:
           export LIBYANG_LIBRARIES=/usr/local/lib
           export SYSREPO_HEADERS=/usr/local/include
           export SYSREPO_LIBRARIES=/usr/local/lib
-
+          cd sysrepo/build
+          make shm_clean
+          cd ../..
           cd tests/robot-tests
           sudo ./setup.sh
           source ./test-venv/bin/activate
