@@ -81,7 +81,7 @@ jobs:
           sudo ./setup.sh
           #pwd
           #ls config
-          sudo snabb lwaftr run --conf config/lwaftr-start.conf -name test &
+          snabb lwaftr run --conf config/lwaftr-start.conf -name test &
           sysrepo-snabb-plugin &
           #sysrepocfg -X  -m "snabb-softwire-v3"
           sudo ./setup.sh
