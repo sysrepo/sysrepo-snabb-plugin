@@ -76,5 +76,5 @@ jobs:
           cd tests/robot-tests
           sudo ./setup.sh
           source ./test-venv/bin/activate
-          sysrepoctl -l
+          sysrepocfg -X -x "/snabb-softwire-v3:softwire-config/instance/external-device"
           robot src/Main.robot
