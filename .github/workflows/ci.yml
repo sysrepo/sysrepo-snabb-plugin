@@ -32,6 +32,8 @@ jobs:
           CC=gcc cmake -B build
           cmake --build build
           sudo cmake --install build
+          cd build
+          make shm_clean
           sudo ldconfig
           cd ..
 
