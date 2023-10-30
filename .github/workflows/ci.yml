@@ -75,7 +75,7 @@ jobs:
           export SYSREPO_HEADERS=/usr/local/include
           export SYSREPO_LIBRARIES=/usr/local/lib
           cd sysrepo/build
-          make shm_clean
+          sudo make shm_clean
           cd ../..
           cd tests/robot-tests
           sudo snabb lwaftr run --conf config/lwaftr-start.conf -name test &
