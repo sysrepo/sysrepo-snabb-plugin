@@ -77,7 +77,7 @@ jobs:
           cd sysrepo/build
           make shm_clean
           cd ../..
-          sysrepocfg -X -x "/snabb-softwire-v3:softwire-config/instance/external-device"
+          sysrepocfg -X  -m "snabb-softwire-v3"
           #cd tests/robot-tests
           #sudo ./setup.sh
           #source ./test-venv/bin/activate
