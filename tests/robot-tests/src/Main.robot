@@ -15,6 +15,7 @@ Test Teardown 	Cleanup
 *** Test Cases ***
 Test Get External Interface Name
 	[Documentation] 	Check if it's possible to get data values from the snabb config
+	Log To Console     ${Connection} ${Session Running}
 	${Interface Name}= 	Get Datastore Data 	${Connection} 	
 	... 	${Session Running} 	/softwire-config/instance/external-device 	xml
 	Element Text Should Be 	${Interface Name}   aftrv4 	xpath=*/external-device
@@ -46,4 +47,3 @@ Test Add softwire
 	${Softwire Elements}= 	Get Elements 	${Datastore state} 	xpath=*/softwire
 	${tmp}=    Element to String  ${Softwire Elements}[1]
 	Elements Should Be Equal   ${New softwire}	${Softwire Elements}[1]
-		
