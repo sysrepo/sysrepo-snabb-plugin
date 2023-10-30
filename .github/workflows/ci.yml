@@ -75,7 +75,7 @@ jobs:
 
           cd tests/robot-tests
           sudo ./setup.sh
-          sysrepo-snabb-plugin &
+          sudo sysrepo-snabb-plugin &
           sleep 2 && sudo killall sysrepo-snabb-plugin 
           source ./test-venv/bin/activate
           sysrepocfg -X -x "/snabb-softwire-v3:softwire-config/instance/external-device"
