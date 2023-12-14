@@ -1,0 +1,10 @@
+build
+cffi
+libyang
+packaging
+pycparser
+pyproject_hooks
+robotframework
+robotframework-sysrepolibrary
+sysrepo
+xmltodict

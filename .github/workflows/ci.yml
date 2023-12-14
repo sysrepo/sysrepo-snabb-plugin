@@ -1,0 +1,64 @@
+name: sysrepo-plugin-snabb CI
+
+on:
+  push:
+    branches: ["devel"]
+  pull_request:
+    branches: ["devel"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: 'recursive'
+      - name: deps-libyang
+        shell: bash
+        run: |
+          git clone https://github.com/cesnet/libyang
+          cd libyang
+          CC=gcc cmake -B build
+          cmake --build build
+          sudo cmake --install build
+          sudo ldconfig
+          cd ..
+
+      - name: Deps-sysrepo
+        shell: bash
+        run: |
+          git clone https://github.com/sysrepo/sysrepo
+          cd sysrepo
+          CC=gcc cmake -B build
+          cmake --build build
+          sudo cmake --install build
+          sudo ldconfig
+          cd ..
+
+      - name: Deps-snabb
+        shell: bash
+        run: |
+          git clone https://github.com/SnabbCo/snabb
+          cd snabb
+          make -j4 && sudo make install 
+          sudo ldconfig
+          cd ..
+
+      - name: Snabb-plugin
+        shell: bash
+        working-directory: ${{github.workspace}}
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE:String="Release" \
+                  -DPLUGIN:BOOL=ON -DSR_PLUGINS_DIR=/usr/local/lib/ \
+                  -DYANG_MODEL:String="snabb-softwire-v3"
+          cd build
+          make -j4 
+          sudo make install 
+          sudo ldconfig
+          cd ..
+
+      - name: Install-yang-model
+        shell: bash
+        working-directory: ${{github.workspace}}
+        run: |
+          sudo sysrepoctl -i snabb/src/lib/yang/snabb-softwire-v3.yang
